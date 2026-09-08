@@ -82,6 +82,11 @@ contract VqStakingTest is Test {
         assertEq(staking.CLOCK_MODE(), "mode=blockstamp");
     }
 
+    function test_ConstructorRejectsStakedTokenAsRewardToken() public {
+        vm.expectRevert(VqStaking.SameRewardToken.selector);
+        new VqStaking(address(vault), address(vault));
+    }
+
     // ------------------------------------------------------------------
     // Staking
     // ------------------------------------------------------------------

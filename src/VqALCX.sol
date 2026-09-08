@@ -256,15 +256,15 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         return shares; // 1:1 at watermark
     }
 
-    function maxDeposit(address receiver) public view returns (uint256) {
-        return _getFulfillableDepositAmount(receiver);
+    function maxDeposit(address) public view returns (uint256) {
+        return _getFulfillableDepositAmount(msg.sender);
     }
 
     function previewDeposit(uint256 assets) public pure returns (uint256) {
         return assets; // 1:1
     }
 
-    function deposit(uint256 assets, address receiver) public nonReentrant whenNotPaused returns (uint256) {
+    function deposit(uint256 assets, address receiver) public nonReentrant returns (uint256) {
         if (assets == 0) revert ZeroAmount();
         _drip();
         (bool found, uint256 requestId) = _findClaimableDepositRequest(msg.sender, assets);
@@ -285,7 +285,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         return shares; // 1:1
     }
 
-    function mint(uint256 shares, address receiver) public nonReentrant whenNotPaused returns (uint256) {
+    function mint(uint256 shares, address receiver) public nonReentrant returns (uint256) {
         if (shares == 0) revert ZeroAmount();
         _drip();
         (bool found, uint256 requestId) = _findClaimableDepositRequest(msg.sender, shares);

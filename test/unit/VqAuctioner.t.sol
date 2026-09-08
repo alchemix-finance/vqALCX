@@ -457,4 +457,44 @@ contract VqAuctionerTest is Test {
 
         assertEq(vault.balanceOf(address(auctioner)), 0, "INV-A-3: vqALCX left in auctioneer");
     }
+
+    // ------------------------------------------------------------------
+    // Settlement restricted to the live round
+    // ------------------------------------------------------------------
+
+    function test_SettleDepositRoundRejectsNonCurrentRoundId() public {
+        vm.warp(block.timestamp + 100);
+        auctioner.ensureDepositRound();
+
+        vm.prank(alice);
+        auctioner.bidDeposit(1000e18, 1050e18);
+
+        vm.expectRevert(VqAuctioner.RoundNotActive.selector);
+        auctioner.settleDepositRound(0);
+
+        vm.expectRevert(VqAuctioner.RoundNotActive.selector);
+        auctioner.settleDepositRound(2);
+
+        assertEq(auctioner.currentDepositRound(), 1);
+
+        VqAuctioner.Round memory round = auctioner.getDepositRound(1);
+        assertFalse(round.settled);
+        assertEq(round.highestBidder, alice);
+    }
+
+    function test_SettleWithdrawRoundRejectsNonCurrentRoundId() public {
+        vm.warp(block.timestamp + 100);
+        auctioner.ensureWithdrawRound();
+
+        vm.expectRevert(VqAuctioner.RoundNotActive.selector);
+        auctioner.settleWithdrawRound(0);
+
+        vm.expectRevert(VqAuctioner.RoundNotActive.selector);
+        auctioner.settleWithdrawRound(2);
+
+        assertEq(auctioner.currentWithdrawRound(), 1);
+
+        VqAuctioner.Round memory round = auctioner.getWithdrawRound(1);
+        assertFalse(round.settled);
+    }
 }

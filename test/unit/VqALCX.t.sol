@@ -153,6 +153,7 @@ contract VqALCXTest is Test {
         vm.warp(block.timestamp + 5);
         vault.drip();
 
+        vm.prank(alice);
         assertEq(vault.maxDeposit(alice), 500e18);
 
         vm.prank(alice);
@@ -454,8 +455,6 @@ contract VqALCXTest is Test {
         vault.requestDeposit(100e18);
         vm.expectRevert(VqALCX.EnforcedPause.selector);
         vault.requestWithdraw(100e18);
-        vm.expectRevert(VqALCX.EnforcedPause.selector);
-        vault.deposit(100e18, alice);
         vm.stopPrank();
 
         uint256 balanceBefore = alcx.balanceOf(alice);
@@ -610,5 +609,58 @@ contract VqALCXTest is Test {
         vault.redeem(1000e18, alice, alice);
         assertEq(alcx.balanceOf(alice), before + 1000e18);
         assertEq(vault.balanceOf(alice), 0);
+    }
+
+    // ------------------------------------------------------------------
+    // Pause: claims of already-custodied funds stay open
+    // ------------------------------------------------------------------
+
+    function test_DepositClaimWhilePaused() public {
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+        vm.warp(block.timestamp + 11);
+
+        vm.prank(governance);
+        vault.pause();
+
+        vm.prank(alice);
+        vault.deposit(1000e18, alice);
+        assertEq(vault.balanceOf(alice), 1000e18);
+    }
+
+    function test_MintClaimWhilePaused() public {
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+        vm.warp(block.timestamp + 11);
+
+        vm.prank(governance);
+        vault.pause();
+
+        vm.prank(alice);
+        vault.mint(1000e18, alice);
+        assertEq(vault.balanceOf(alice), 1000e18);
+    }
+
+    // ------------------------------------------------------------------
+    // Views quote for the caller
+    // ------------------------------------------------------------------
+
+    function test_MaxDepositQuotedForCaller() public {
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+        vm.warp(block.timestamp + 5);
+        vault.drip();
+
+        assertEq(vault.maxDeposit(alice), 0);
+        assertEq(vault.maxMint(alice), 0);
+
+        vm.startPrank(alice);
+        assertEq(vault.maxDeposit(alice), 500e18);
+        assertEq(vault.maxMint(alice), 500e18);
+        vault.deposit(500e18, alice);
+        vm.stopPrank();
+
+        vm.prank(alice);
+        assertEq(vault.maxDeposit(alice), 0);
     }
 }

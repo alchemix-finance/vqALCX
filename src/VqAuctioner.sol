@@ -215,6 +215,7 @@ contract VqAuctioner is ReentrancyGuard {
     }
 
     function settleDepositRound(uint256 roundId) external nonReentrant {
+        if (roundId == 0 || roundId != currentDepositRound) revert RoundNotActive();
         Round storage round = depositRounds[roundId];
         if (round.settled) revert RoundAlreadySettled();
         if (block.timestamp < round.endTime) revert RoundNotActive();
@@ -262,6 +263,7 @@ contract VqAuctioner is ReentrancyGuard {
     }
 
     function settleWithdrawRound(uint256 roundId) external nonReentrant {
+        if (roundId == 0 || roundId != currentWithdrawRound) revert RoundNotActive();
         Round storage round = withdrawRounds[roundId];
         if (round.settled) revert RoundAlreadySettled();
         if (block.timestamp < round.endTime) revert RoundNotActive();

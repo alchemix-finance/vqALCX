@@ -45,12 +45,14 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
 
     error InsufficientBalance();
     error ZeroAmount();
+    error SameRewardToken();
 
     // ------------------------------------------------------------------------
     // Constructor
     // ------------------------------------------------------------------------
 
     constructor(address _vqALCX, address _rewardToken) EIP712("VqStaking", "1") {
+        if (_vqALCX == _rewardToken) revert SameRewardToken();
         vqALCX = IERC20(_vqALCX);
         rewardToken = IERC20(_rewardToken);
     }
