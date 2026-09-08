@@ -70,16 +70,20 @@ contract VqALCXTest is Test {
     // ------------------------------------------------------------------
 
     function test_RequestDeposit() public {
+        uint256 balanceBefore = alcx.balanceOf(alice);
         vm.prank(alice);
         uint256 requestId = vault.requestDeposit(1000e18);
 
         assertEq(requestId, 0);
         assertEq(vault.depositQueueDepth(), 1000e18);
+        assertEq(alcx.balanceOf(alice), balanceBefore - 1000e18);
+        assertEq(alcx.balanceOf(address(vault)), 1000e18);
 
         VqALCX.Request memory req = vault.getDepositRequest(0);
         assertEq(req.owner, alice);
         assertEq(req.amount, 1000e18);
-        assertFalse(req.fulfilled);
+        assertEq(req.filled, 0);
+        assertEq(req.claimed, 0);
         assertFalse(req.cancelled);
     }
 
@@ -87,6 +91,19 @@ contract VqALCXTest is Test {
         vm.prank(alice);
         vm.expectRevert(VqALCX.CapacityExceeded.selector);
         vault.requestDeposit(CAPACITY + 1);
+    }
+
+    function test_RequestDepositRequiresAlcxBalance() public {
+        address poor = address(0x5555);
+        vm.prank(poor);
+        vm.expectRevert();
+        vault.requestDeposit(100e18);
+    }
+
+    function test_RequestDepositRejectsZero() public {
+        vm.prank(alice);
+        vm.expectRevert(VqALCX.ZeroAmount.selector);
+        vault.requestDeposit(0);
     }
 
     // ------------------------------------------------------------------
@@ -104,20 +121,47 @@ contract VqALCXTest is Test {
         vault.drip();
 
         VqALCX.Request memory req = vault.getDepositRequest(0);
-        assertTrue(req.fulfilled);
+        assertEq(req.filled, 1000e18);
+        assertEq(vault.depositQueueDepth(), 0);
     }
 
     function test_LazyDripPartial() public {
         vm.prank(alice);
         vault.requestDeposit(1000e18);
 
-        // Warp only 5 seconds: 5 * 100 = 500 fulfillable, but request is 1000
+        // Warp only 5 seconds: 5 * 100 = 500 fulfillable out of 1000
         vm.warp(block.timestamp + 5);
 
         vault.drip();
 
         VqALCX.Request memory req = vault.getDepositRequest(0);
-        assertFalse(req.fulfilled);
+        assertEq(req.filled, 500e18);
+        assertEq(vault.depositQueueDepth(), 500e18);
+
+        vm.warp(block.timestamp + 5);
+        vault.drip();
+
+        req = vault.getDepositRequest(0);
+        assertEq(req.filled, 1000e18);
+        assertEq(vault.depositQueueDepth(), 0);
+    }
+
+    function test_PartialDripFillIsClaimable() public {
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+
+        vm.warp(block.timestamp + 5);
+        vault.drip();
+
+        assertEq(vault.maxDeposit(alice), 500e18);
+
+        vm.prank(alice);
+        vault.deposit(500e18, alice);
+        assertEq(vault.balanceOf(alice), 500e18);
+
+        vm.prank(alice);
+        vm.expectRevert(VqALCX.RequestNotFulfillable.selector);
+        vault.deposit(1, alice);
     }
 
     // ------------------------------------------------------------------
@@ -125,12 +169,12 @@ contract VqALCXTest is Test {
     // ------------------------------------------------------------------
 
     function test_DepositAfterFulfillment() public {
+        uint256 balanceBefore = alcx.balanceOf(alice);
         vm.prank(alice);
         vault.requestDeposit(1000e18);
 
         vm.warp(block.timestamp + 11);
 
-        uint256 balanceBefore = alcx.balanceOf(alice);
         vm.prank(alice);
         uint256 shares = vault.deposit(1000e18, alice);
 
@@ -150,6 +194,21 @@ contract VqALCXTest is Test {
         vault.deposit(1000e18, alice);
     }
 
+    function test_PartialClaimRetainsRemainder() public {
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+
+        vm.warp(block.timestamp + 11);
+
+        vm.startPrank(alice);
+        vault.deposit(400e18, alice);
+        assertEq(vault.maxDeposit(alice), 600e18);
+        vault.deposit(600e18, alice);
+        vm.stopPrank();
+
+        assertEq(vault.balanceOf(alice), 1000e18);
+    }
+
     // ------------------------------------------------------------------
     // Withdraw flow
     // ------------------------------------------------------------------
@@ -164,9 +223,11 @@ contract VqALCXTest is Test {
 
         assertEq(vault.balanceOf(alice), 1000e18);
 
-        // Request withdraw
+        // Request withdraw: shares are escrowed in the vault
         vm.prank(alice);
         vault.requestWithdraw(1000e18);
+        assertEq(vault.balanceOf(alice), 0);
+        assertEq(vault.balanceOf(address(vault)), 1000e18);
 
         vm.warp(block.timestamp + 11);
 
@@ -178,15 +239,21 @@ contract VqALCXTest is Test {
         assertEq(alcx.balanceOf(alice), balanceBefore + 1000e18);
     }
 
+    function test_RequestWithdrawRequiresShareBalance() public {
+        vm.prank(bob);
+        vm.expectRevert();
+        vault.requestWithdraw(100e18);
+    }
+
     // ------------------------------------------------------------------
     // Cancellation
     // ------------------------------------------------------------------
 
     function test_CancelDepositRequest() public {
+        uint256 balanceBefore = alcx.balanceOf(alice);
         vm.prank(alice);
         vault.requestDeposit(1000e18);
 
-        uint256 balanceBefore = alcx.balanceOf(alice);
         vm.prank(alice);
         vault.cancelDepositRequest(0);
 
@@ -194,7 +261,7 @@ contract VqALCXTest is Test {
         assertTrue(req.cancelled);
         assertEq(vault.depositQueueDepth(), 0);
 
-        // Penalty: 1% of 1000 = 10 ALCX
+        // Net effect: 1% penalty of 1000 = 10 ALCX
         assertEq(alcx.balanceOf(alice), balanceBefore - 10e18);
     }
 
@@ -210,15 +277,16 @@ contract VqALCXTest is Test {
         vm.prank(alice);
         vault.requestWithdraw(1000e18);
 
-        uint256 balanceBefore = vault.balanceOf(alice);
         vm.prank(alice);
         vault.cancelWithdrawRequest(0);
 
         VqALCX.Request memory req = vault.getWithdrawRequest(0);
         assertTrue(req.cancelled);
+        assertEq(vault.withdrawQueueDepth(), 0);
 
-        // Penalty: burn 1% of 1000 = 10 vqALCX
-        assertEq(vault.balanceOf(alice), balanceBefore - 10e18);
+        // Escrow returned minus 1% penalty of 1000 = 10 vqALCX burned
+        assertEq(vault.balanceOf(alice), 990e18);
+        assertEq(vault.totalSupply(), 990e18);
     }
 
     function test_CancelRevertsIfNotOwner() public {
@@ -228,6 +296,40 @@ contract VqALCXTest is Test {
         vm.prank(bob);
         vm.expectRevert(VqALCX.NotRequestOwner.selector);
         vault.cancelDepositRequest(0);
+    }
+
+    function test_CancelRevertsAfterFullClaim() public {
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+        vm.warp(block.timestamp + 11);
+
+        vm.startPrank(alice);
+        vault.deposit(1000e18, alice);
+        vm.expectRevert(VqALCX.AlreadyFulfilled.selector);
+        vault.cancelDepositRequest(0);
+        vm.stopPrank();
+
+        assertEq(vault.depositQueueDepth(), 0);
+    }
+
+    function test_CancelAfterPartialFillKeepsClaimableAmount() public {
+        uint256 balanceBefore = alcx.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+        vm.warp(block.timestamp + 5);
+        vault.drip();
+
+        vm.prank(alice);
+        vault.cancelDepositRequest(0);
+
+        assertEq(vault.depositQueueDepth(), 0);
+        // 500 unfilled refunded minus 1% penalty of 500 = 5 ALCX;
+        // the filled 500 stays escrowed and claimable as shares
+        assertEq(alcx.balanceOf(alice), balanceBefore - 505e18);
+
+        vm.prank(alice);
+        vault.deposit(500e18, alice);
+        assertEq(vault.balanceOf(alice), 500e18);
     }
 
     // ------------------------------------------------------------------
@@ -271,13 +373,101 @@ contract VqALCXTest is Test {
         assertEq(vault.governanceAddress(), newGov);
     }
 
-    function test_AuctioneerSetViaGovernance() public {
+    function test_TwoStepAuctioneerTransfer() public {
         address newAuctioneer = address(0x4444);
 
         vm.prank(governance);
-        vault.setAuthorizedAuctioneer(newAuctioneer);
+        vault.proposeAuctioneer(newAuctioneer);
+        assertEq(vault.authorizedAuctioneer(), auctioneer);
+
+        vm.prank(newAuctioneer);
+        vault.acceptAuctioneer();
 
         assertEq(vault.authorizedAuctioneer(), newAuctioneer);
+    }
+
+    function test_AcceptAuctioneerOnlyByPending() public {
+        vm.prank(governance);
+        vault.proposeAuctioneer(address(0x4444));
+
+        vm.prank(bob);
+        vm.expectRevert(VqALCX.NotAuctioneer.selector);
+        vault.acceptAuctioneer();
+    }
+
+    // ------------------------------------------------------------------
+    // Bucket parameter bounds
+    // ------------------------------------------------------------------
+
+    function test_SetBucketParamsRejectsZeroRate() public {
+        vm.prank(governance);
+        vm.expectRevert(VqALCX.InvalidBucketParams.selector);
+        vault.setDepositBucketParams(0, CAPACITY);
+    }
+
+    function test_SetBucketParamsRejectsCapacityBelowPending() public {
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+
+        vm.prank(governance);
+        vm.expectRevert(VqALCX.InvalidBucketParams.selector);
+        vault.setDepositBucketParams(RATE, 999e18);
+    }
+
+    function test_CancellationPenaltyBounds() public {
+        vm.prank(governance);
+        vm.expectRevert(VqALCX.InvalidPenalty.selector);
+        vault.setCancellationPenaltyBps(501);
+
+        vm.prank(governance);
+        vault.setCancellationPenaltyBps(200);
+
+        uint256 balanceBefore = alcx.balanceOf(alice);
+        vm.startPrank(alice);
+        vault.requestDeposit(1000e18);
+        vault.cancelDepositRequest(0);
+        vm.stopPrank();
+
+        assertEq(alcx.balanceOf(alice), balanceBefore - 20e18);
+    }
+
+    // ------------------------------------------------------------------
+    // Pause
+    // ------------------------------------------------------------------
+
+    function test_PauseBlocksNewEntriesAndAllowsWithdrawals() public {
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+        vm.warp(block.timestamp + 11);
+        vm.prank(alice);
+        vault.deposit(1000e18, alice);
+
+        vm.prank(alice);
+        vault.requestWithdraw(1000e18);
+        vm.warp(block.timestamp + 11);
+
+        vm.prank(governance);
+        vault.pause();
+
+        vm.startPrank(alice);
+        vm.expectRevert(VqALCX.EnforcedPause.selector);
+        vault.requestDeposit(100e18);
+        vm.expectRevert(VqALCX.EnforcedPause.selector);
+        vault.requestWithdraw(100e18);
+        vm.expectRevert(VqALCX.EnforcedPause.selector);
+        vault.deposit(100e18, alice);
+        vm.stopPrank();
+
+        uint256 balanceBefore = alcx.balanceOf(alice);
+        vm.prank(alice);
+        vault.withdraw(1000e18, alice, alice);
+        assertEq(alcx.balanceOf(alice), balanceBefore + 1000e18);
+
+        vm.prank(governance);
+        vault.unpause();
+
+        vm.prank(alice);
+        vault.requestDeposit(100e18);
     }
 
     // ------------------------------------------------------------------
@@ -310,6 +500,14 @@ contract VqALCXTest is Test {
         vault.mintViaAuction(alice, 500e18);
     }
 
+    function test_BurnViaAuctionRejectsPayoutAboveBurn() public {
+        vm.warp(block.timestamp + 10);
+
+        vm.prank(auctioneer);
+        vm.expectRevert(VqALCX.PayoutExceedsBurn.selector);
+        vault.burnViaAuction(alice, 100e18, 101e18);
+    }
+
     // ------------------------------------------------------------------
     // FIFO ordering
     // ------------------------------------------------------------------
@@ -328,8 +526,8 @@ contract VqALCXTest is Test {
 
         VqALCX.Request memory req0 = vault.getDepositRequest(0);
         VqALCX.Request memory req1 = vault.getDepositRequest(1);
-        assertTrue(req0.fulfilled);
-        assertTrue(req1.fulfilled);
+        assertEq(req0.filled, 500e18);
+        assertEq(req1.filled, 500e18);
     }
 
     // ------------------------------------------------------------------

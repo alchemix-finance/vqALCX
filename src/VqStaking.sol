@@ -87,16 +87,15 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
         uint256 newRewards = currentBalance - _lastRewardBalance;
         if (newRewards > 0 && _totalStaked > 0) {
             rewardPerShare += (newRewards * SHARES_PRECISION) / _totalStaked;
+            _lastRewardBalance = currentBalance;
             emit RewardsAccrued(newRewards);
         }
-        _lastRewardBalance = currentBalance;
     }
 
     function _updateUserRewards(address account) internal {
         accrueRewards();
         uint256 balance = _stakedBalances[account];
-        accruedRewards[account] +=
-            (balance * (rewardPerShare - userRewardPerSharePaid[account])) / SHARES_PRECISION;
+        accruedRewards[account] += (balance * (rewardPerShare - userRewardPerSharePaid[account])) / SHARES_PRECISION;
         userRewardPerSharePaid[account] = rewardPerShare;
     }
 
@@ -149,14 +148,15 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
     function earned(address account) external view returns (uint256) {
         uint256 balance = _stakedBalances[account];
         return
-            accruedRewards[account] + ((balance * (rewardPerShare - userRewardPerSharePaid[account])) / SHARES_PRECISION);
+            accruedRewards[account]
+                + ((balance * (rewardPerShare - userRewardPerSharePaid[account])) / SHARES_PRECISION);
     }
 
     function lastRewardBalance() external view returns (uint256) {
         return _lastRewardBalance;
     }
 
-     function claimRewards() external nonReentrant {
+    function claimRewards() external nonReentrant {
         _updateUserRewards(msg.sender);
         uint256 reward = accruedRewards[msg.sender];
         if (reward == 0) revert ZeroAmount();

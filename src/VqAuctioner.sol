@@ -12,6 +12,9 @@ interface IVqALCX {
     function depositBucketRate() external view returns (uint256);
     function withdrawBucketCapacity() external view returns (uint256);
     function withdrawBucketRate() external view returns (uint256);
+    function drip() external;
+    function depositAuctionCapacity() external view returns (uint256);
+    function withdrawAuctionCapacity() external view returns (uint256);
 }
 
 contract VqAuctioner is ReentrancyGuard {
@@ -68,6 +71,7 @@ contract VqAuctioner is ReentrancyGuard {
     error InsufficientCapacity();
     error NotRoundWinner();
     error ZeroAmount();
+    error InvalidPrice();
 
     constructor(address _alcx, address _vqALCX, address _daoTreasury, uint256 _roundDuration) {
         alcx = IERC20(_alcx);
@@ -135,9 +139,10 @@ contract VqAuctioner is ReentrancyGuard {
 
     function bidDeposit(uint256 amount, uint256 maxPrice) external nonReentrant returns (uint256 bidId) {
         if (amount == 0) revert ZeroAmount();
+        if (maxPrice < amount) revert InvalidPrice();
         uint256 roundId = this.ensureDepositRound();
         Round storage round = depositRounds[roundId];
-        
+
         if (block.timestamp > round.endTime) revert RoundNotActive();
         if (round.totalFilled + amount > round.capacity) revert InsufficientCapacity();
 
@@ -159,8 +164,7 @@ contract VqAuctioner is ReentrancyGuard {
 
         // lock new highest bid
         alcx.safeTransferFrom(msg.sender, address(this), maxPrice);
-        depositLockedBids[roundId][msg.sender] =
-            LockedBid({bidder: msg.sender, amount: amount, price: maxPrice});
+        depositLockedBids[roundId][msg.sender] = LockedBid({bidder: msg.sender, amount: amount, price: maxPrice});
         depositLockedTotal[roundId] += maxPrice;
 
         round.highestBidder = msg.sender;
@@ -173,6 +177,7 @@ contract VqAuctioner is ReentrancyGuard {
 
     function bidWithdraw(uint256 amount, uint256 minPrice) external nonReentrant returns (uint256 bidId) {
         if (amount == 0) revert ZeroAmount();
+        if (minPrice > amount) revert InvalidPrice();
         uint256 roundId = this.ensureWithdrawRound();
         Round storage round = withdrawRounds[roundId];
         if (block.timestamp > round.endTime) revert RoundNotActive();
@@ -198,8 +203,7 @@ contract VqAuctioner is ReentrancyGuard {
 
         // lock new lowest bid
         vqALCX.safeTransferFrom(msg.sender, address(this), amount);
-        withdrawLockedBids[roundId][msg.sender] =
-            LockedBid({bidder: msg.sender, amount: amount, price: minPrice});
+        withdrawLockedBids[roundId][msg.sender] = LockedBid({bidder: msg.sender, amount: amount, price: minPrice});
         withdrawLockedTotal[roundId] += amount;
 
         round.highestBidder = msg.sender;
@@ -223,32 +227,36 @@ contract VqAuctioner is ReentrancyGuard {
 
         round.settled = true;
         address winner = round.highestBidder;
-        uint256 fillAmount = round.highestBidAmount;
+        uint256 bidAmount = round.highestBidAmount;
         uint256 clearingPrice = round.highestBidPrice;
 
         LockedBid storage winningBid = depositLockedBids[roundId][winner];
         winningBid.price = 0;
         depositLockedTotal[roundId] -= clearingPrice;
 
-        
-        uint256 baseAmount = fillAmount; // 1:1 backing
-        uint256 premium = clearingPrice > baseAmount ? clearingPrice - baseAmount : 0;
+        vault.drip();
+        uint256 fill = bidAmount;
+        uint256 available = vault.depositAuctionCapacity();
+        if (fill > available) fill = available;
 
-    
-        alcx.safeTransfer(address(vault), baseAmount);
+        uint256 charged = (clearingPrice * fill) / bidAmount;
+        uint256 premium = charged > fill ? charged - fill : 0;
+        uint256 refund = clearingPrice - charged;
 
-    
+        if (fill > 0) {
+            alcx.safeTransfer(address(vault), fill);
+            vault.mintViaAuction(winner, fill);
+        }
         if (premium > 0) {
             alcx.safeTransfer(daoTreasury, premium);
         }
+        if (refund > 0) {
+            alcx.safeTransfer(winner, refund);
+        }
 
+        round.totalFilled = fill;
 
-        vault.mintViaAuction(winner, fillAmount);
-
-        round.totalFilled = fillAmount;
-
-        emit DepositRoundSettled(roundId, winner, fillAmount, clearingPrice);
-
+        emit DepositRoundSettled(roundId, winner, fill, clearingPrice);
 
         _startDepositRound();
     }
@@ -265,21 +273,31 @@ contract VqAuctioner is ReentrancyGuard {
 
         round.settled = true;
         address winner = round.highestBidder;
-        uint256 fillAmount = round.highestBidAmount;
-        uint256 clearingPrice = round.highestBidPrice; // min ALCX the winner is willing to receive
+        uint256 bidAmount = round.highestBidAmount;
+        uint256 clearingPrice = round.highestBidPrice;
 
         LockedBid storage winningBid = withdrawLockedBids[roundId][winner];
         winningBid.amount = 0;
-        withdrawLockedTotal[roundId] -= fillAmount;
+        withdrawLockedTotal[roundId] -= bidAmount;
 
+        vault.drip();
+        uint256 fill = bidAmount;
+        uint256 available = vault.withdrawAuctionCapacity();
+        if (fill > available) fill = available;
 
-        vqALCX.approve(address(vault), fillAmount);
-        vault.burnViaAuction(winner, fillAmount, clearingPrice);
+        uint256 payout = (clearingPrice * fill) / bidAmount;
+        uint256 refundAmount = bidAmount - fill;
 
-        round.totalFilled = fillAmount;
+        if (fill > 0) {
+            vault.burnViaAuction(winner, fill, payout);
+        }
+        if (refundAmount > 0) {
+            vqALCX.safeTransfer(winner, refundAmount);
+        }
 
-        emit WithdrawRoundSettled(roundId, winner, fillAmount, clearingPrice);
+        round.totalFilled = fill;
 
+        emit WithdrawRoundSettled(roundId, winner, fill, clearingPrice);
 
         _startWithdrawRound();
     }

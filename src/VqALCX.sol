@@ -22,7 +22,8 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     struct Request {
         address owner;
         uint256 amount;
-        bool fulfilled;
+        uint256 filled;
+        uint256 claimed;
         bool cancelled;
     }
 
@@ -34,15 +35,22 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
 
     address public governanceAddress;
     address public authorizedAuctioneer;
+    address private _pendingGovernance;
+    address private _pendingAuctioneer;
 
-    uint256 public constant CANCELLATION_PENALTY_BPS = 100; // 1%
+    uint256 public constant MAX_CANCELLATION_PENALTY_BPS = 500;
     uint256 public constant MAX_BPS = 10000;
+    uint256 public cancellationPenaltyBps = 100;
+
+    bool public paused;
 
     Bucket public depositBucket;
     Bucket public withdrawBucket;
 
     mapping(uint256 => Request) public depositRequests;
     mapping(uint256 => Request) public withdrawRequests;
+    mapping(address => uint256[]) public depositRequestIds;
+    mapping(address => uint256[]) public withdrawRequestIds;
 
     event DepositRequested(uint256 indexed requestId, address indexed owner, uint256 amount);
     event WithdrawRequested(uint256 indexed requestId, address indexed owner, uint256 amount);
@@ -55,6 +63,10 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     event AuctionBurnExecuted(address indexed from, uint256 amount);
     event PendingGovernanceProposed(address indexed newGovernance);
     event GovernanceAccepted(address indexed newGovernance);
+    event PendingAuctioneerProposed(address indexed newAuctioneer);
+    event AuctioneerAccepted(address indexed newAuctioneer);
+    event CancellationPenaltyUpdated(uint256 penaltyBps);
+    event PauseChanged(bool paused);
 
     error NotGovernance();
     error NotAuctioneer();
@@ -64,19 +76,20 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     error AlreadyCancelled();
     error RequestNotFulfillable();
     error ZeroAddress();
+    error ZeroAmount();
+    error EnforcedPause();
+    error PayoutExceedsBurn();
+    error InvalidBucketParams();
+    error InvalidPenalty();
 
-    address private _pendingGovernance;
-
-    constructor(address asset_, address governance_, address auctioneer_)
-        ERC20("veQueue ALCX", "vqALCX")
-    {
+    constructor(address asset_, address governance_, address auctioneer_) ERC20("veQueue ALCX", "vqALCX") {
         if (asset_ == address(0) || governance_ == address(0)) revert ZeroAddress();
         _asset = IERC20(asset_);
         governanceAddress = governance_;
         // auctioneer can be address(0) initially
         authorizedAuctioneer = auctioneer_;
 
-        // Buckets start empty 
+        // Buckets start empty
         depositBucket.lastDripTime = block.timestamp;
         withdrawBucket.lastDripTime = block.timestamp;
     }
@@ -91,6 +104,11 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         _;
     }
 
+    modifier whenNotPaused() {
+        if (paused) revert EnforcedPause();
+        _;
+    }
+
     function _dripDepositBucket() internal {
         Bucket storage b = depositBucket;
         uint256 elapsed = block.timestamp - b.lastDripTime;
@@ -101,21 +119,18 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
 
         while (fulfillable > 0 && b.head < b.tail) {
             Request storage req = depositRequests[b.head];
-            if (req.cancelled) {
+            uint256 remaining = req.amount - req.filled;
+            if (req.cancelled || remaining == 0) {
                 b.head++;
                 continue;
             }
-            if (req.fulfilled) {
+            uint256 take = remaining > fulfillable ? fulfillable : remaining;
+            req.filled += take;
+            fulfillable -= take;
+            b.pendingAmount -= take;
+            if (req.filled == req.amount) {
                 b.head++;
-                continue;
             }
-            if (req.amount > fulfillable) {
-                break; // not enough budget for this request, wait
-            }
-            req.fulfilled = true;
-            fulfillable -= req.amount;
-            b.pendingAmount -= req.amount;
-            b.head++;
         }
 
         // remaining fulfillable is available for auctions
@@ -132,21 +147,18 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
 
         while (fulfillable > 0 && b.head < b.tail) {
             Request storage req = withdrawRequests[b.head];
-            if (req.cancelled) {
+            uint256 remaining = req.amount - req.filled;
+            if (req.cancelled || remaining == 0) {
                 b.head++;
                 continue;
             }
-            if (req.fulfilled) {
+            uint256 take = remaining > fulfillable ? fulfillable : remaining;
+            req.filled += take;
+            fulfillable -= take;
+            b.pendingAmount -= take;
+            if (req.filled == req.amount) {
                 b.head++;
-                continue;
             }
-            if (req.amount > fulfillable) {
-                break;
-            }
-            req.fulfilled = true;
-            fulfillable -= req.amount;
-            b.pendingAmount -= req.amount;
-            b.head++;
         }
 
         b.availableAuctionCapacity += fulfillable;
@@ -157,62 +169,76 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         _dripWithdrawBucket();
     }
 
-    function requestDeposit(uint256 assets) external returns (uint256 requestId) {
+    function requestDeposit(uint256 assets) external nonReentrant whenNotPaused returns (uint256 requestId) {
+        if (assets == 0) revert ZeroAmount();
         _dripDepositBucket();
         Bucket storage b = depositBucket;
         if (b.pendingAmount + assets > b.capacity) revert CapacityExceeded();
 
+        _asset.safeTransferFrom(msg.sender, address(this), assets);
+
         requestId = b.tail++;
-        depositRequests[requestId] = Request({owner: msg.sender, amount: assets, fulfilled: false, cancelled: false});
+        depositRequests[requestId] =
+            Request({owner: msg.sender, amount: assets, filled: 0, claimed: 0, cancelled: false});
+        depositRequestIds[msg.sender].push(requestId);
         b.pendingAmount += assets;
 
         emit DepositRequested(requestId, msg.sender, assets);
     }
 
-    function requestWithdraw(uint256 assets) external returns (uint256 requestId) {
+    function requestWithdraw(uint256 assets) external nonReentrant whenNotPaused returns (uint256 requestId) {
+        if (assets == 0) revert ZeroAmount();
         _dripWithdrawBucket();
         Bucket storage b = withdrawBucket;
         if (b.pendingAmount + assets > b.capacity) revert CapacityExceeded();
 
+        _transfer(msg.sender, address(this), assets);
+
         requestId = b.tail++;
         withdrawRequests[requestId] =
-            Request({owner: msg.sender, amount: assets, fulfilled: false, cancelled: false});
+            Request({owner: msg.sender, amount: assets, filled: 0, claimed: 0, cancelled: false});
+        withdrawRequestIds[msg.sender].push(requestId);
         b.pendingAmount += assets;
 
         emit WithdrawRequested(requestId, msg.sender, assets);
     }
 
-    function cancelDepositRequest(uint256 requestId) external {
+    function cancelDepositRequest(uint256 requestId) external nonReentrant {
         Request storage req = depositRequests[requestId];
         if (req.owner != msg.sender) revert NotRequestOwner();
-        if (req.fulfilled) revert AlreadyFulfilled();
         if (req.cancelled) revert AlreadyCancelled();
+        uint256 remaining = req.amount - req.filled;
+        if (remaining == 0) revert AlreadyFulfilled();
 
         req.cancelled = true;
-        depositBucket.pendingAmount -= req.amount;
+        depositBucket.pendingAmount -= remaining;
 
-        // penalty: charge cancellation fee in ALCX
-        uint256 penalty = (req.amount * CANCELLATION_PENALTY_BPS) / MAX_BPS;
-        if (penalty > 0) {
-            _asset.safeTransferFrom(msg.sender, address(this), penalty);
+        uint256 penalty = (remaining * cancellationPenaltyBps) / MAX_BPS;
+        uint256 refund = remaining - penalty;
+        if (refund > 0) {
+            _asset.safeTransfer(msg.sender, refund);
         }
 
         emit DepositRequestCancelled(requestId, penalty);
     }
 
-    function cancelWithdrawRequest(uint256 requestId) external {
+    function cancelWithdrawRequest(uint256 requestId) external nonReentrant {
         Request storage req = withdrawRequests[requestId];
         if (req.owner != msg.sender) revert NotRequestOwner();
-        if (req.fulfilled) revert AlreadyFulfilled();
         if (req.cancelled) revert AlreadyCancelled();
+        uint256 remaining = req.amount - req.filled;
+        if (remaining == 0) revert AlreadyFulfilled();
 
         req.cancelled = true;
-        withdrawBucket.pendingAmount -= req.amount;
+        withdrawBucket.pendingAmount -= remaining;
 
-        // penalty: burn equivalent vqALCX
-        uint256 penalty = (req.amount * CANCELLATION_PENALTY_BPS) / MAX_BPS;
+        uint256 penalty = (remaining * cancellationPenaltyBps) / MAX_BPS;
+        uint256 refund = remaining - penalty;
         if (penalty > 0) {
-            _burn(msg.sender, penalty);
+            _burn(address(this), penalty);
+        }
+        if (refund > 0) {
+            _transfer(address(this), msg.sender, refund);
         }
 
         emit WithdrawRequestCancelled(requestId, penalty);
@@ -238,15 +264,16 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         return assets; // 1:1
     }
 
-    function deposit(uint256 assets, address receiver) public nonReentrant returns (uint256) {
+    function deposit(uint256 assets, address receiver) public nonReentrant whenNotPaused returns (uint256) {
+        if (assets == 0) revert ZeroAmount();
         _drip();
-        (bool found, uint256 requestId) = _findFulfillableDepositRequest(msg.sender, assets);
+        (bool found, uint256 requestId) = _findClaimableDepositRequest(msg.sender, assets);
         if (!found) revert RequestNotFulfillable();
 
-        // Consume the request to prevent double-claim
-        depositRequests[requestId].fulfilled = false;
+        depositRequests[requestId].claimed += assets;
 
-        _deposit(msg.sender, receiver, assets);
+        _mint(receiver, assets);
+        emit Deposit(msg.sender, receiver, assets, assets);
         return assets;
     }
 
@@ -258,14 +285,16 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         return shares; // 1:1
     }
 
-    function mint(uint256 shares, address receiver) public nonReentrant returns (uint256) {
+    function mint(uint256 shares, address receiver) public nonReentrant whenNotPaused returns (uint256) {
+        if (shares == 0) revert ZeroAmount();
         _drip();
-        (bool found, uint256 requestId) = _findFulfillableDepositRequest(msg.sender, shares);
+        (bool found, uint256 requestId) = _findClaimableDepositRequest(msg.sender, shares);
         if (!found) revert RequestNotFulfillable();
 
-        depositRequests[requestId].fulfilled = false;
+        depositRequests[requestId].claimed += shares;
 
-        _deposit(msg.sender, receiver, shares);
+        _mint(receiver, shares);
+        emit Deposit(msg.sender, receiver, shares, shares);
         return shares;
     }
 
@@ -278,18 +307,20 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public nonReentrant returns (uint256) {
+        if (assets == 0) revert ZeroAmount();
         _drip();
-        (bool found, uint256 requestId) = _findFulfillableWithdrawRequest(owner, assets);
+        (bool found, uint256 requestId) = _findClaimableWithdrawRequest(owner, assets);
         if (!found) revert RequestNotFulfillable();
 
-        // Consume the request to prevent double-claim
-        withdrawRequests[requestId].fulfilled = false;
+        withdrawRequests[requestId].claimed += assets;
 
         if (msg.sender != owner) {
             _spendAllowance(owner, msg.sender, assets);
         }
 
-        _withdraw(receiver, owner, assets);
+        _burn(address(this), assets);
+        _asset.safeTransfer(receiver, assets);
+        emit Withdraw(msg.sender, receiver, owner, assets, assets);
         return assets;
     }
 
@@ -302,84 +333,76 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function redeem(uint256 shares, address receiver, address owner) public nonReentrant returns (uint256) {
+        if (shares == 0) revert ZeroAmount();
         _drip();
-        (bool found, uint256 requestId) = _findFulfillableWithdrawRequest(owner, shares);
+        (bool found, uint256 requestId) = _findClaimableWithdrawRequest(owner, shares);
         if (!found) revert RequestNotFulfillable();
 
-        withdrawRequests[requestId].fulfilled = false;
+        withdrawRequests[requestId].claimed += shares;
 
         if (msg.sender != owner) {
             _spendAllowance(owner, msg.sender, shares);
         }
 
-        _withdraw(receiver, owner, shares);
+        _burn(address(this), shares);
+        _asset.safeTransfer(receiver, shares);
+        emit Withdraw(msg.sender, receiver, owner, shares, shares);
         return shares;
     }
 
-    function _deposit(address payer, address receiver, uint256 assets) internal {
-        _asset.safeTransferFrom(payer, address(this), assets);
-        _mint(receiver, assets);
-        emit Deposit(payer, receiver, assets, assets);
-    }
-
-    function _withdraw(address receiver, address owner, uint256 assets) internal {
-        _burn(owner, assets);
-        _asset.safeTransfer(receiver, assets);
-        emit Withdraw(msg.sender, receiver, owner, assets, assets);
-    }
-
-    function _findFulfillableDepositRequest(address owner, uint256 minAmount)
+    function _findClaimableDepositRequest(address owner, uint256 minAmount)
         internal
         view
         returns (bool found, uint256 requestId)
     {
-        Bucket storage b = depositBucket;
-        
-        for (uint256 i = 0; i < b.tail; i++) {
-            Request storage req = depositRequests[i];
-            if (req.owner == owner && req.fulfilled && !req.cancelled && req.amount >= minAmount) {
-                return (true, i);
+        uint256[] memory ids = depositRequestIds[owner];
+        for (uint256 i = 0; i < ids.length; i++) {
+            Request storage req = depositRequests[ids[i]];
+            uint256 claimable = req.filled - req.claimed;
+            if (claimable >= minAmount && claimable > 0) {
+                return (true, ids[i]);
             }
         }
         return (false, 0);
     }
 
-    function _findFulfillableWithdrawRequest(address owner, uint256 minAmount)
+    function _findClaimableWithdrawRequest(address owner, uint256 minAmount)
         internal
         view
         returns (bool found, uint256 requestId)
     {
-        Bucket storage b = withdrawBucket;
-        for (uint256 i = 0; i < b.tail; i++) {
-            Request storage req = withdrawRequests[i];
-            if (req.owner == owner && req.fulfilled && !req.cancelled && req.amount >= minAmount) {
-                return (true, i);
+        uint256[] memory ids = withdrawRequestIds[owner];
+        for (uint256 i = 0; i < ids.length; i++) {
+            Request storage req = withdrawRequests[ids[i]];
+            uint256 claimable = req.filled - req.claimed;
+            if (claimable >= minAmount && claimable > 0) {
+                return (true, ids[i]);
             }
         }
         return (false, 0);
     }
 
     function _getFulfillableDepositAmount(address owner) internal view returns (uint256 total) {
-        Bucket storage b = depositBucket;
-        for (uint256 i = 0; i < b.tail; i++) {
-            Request storage req = depositRequests[i];
-            if (req.owner == owner && req.fulfilled && !req.cancelled) {
-                total += req.amount;
+        uint256[] memory ids = depositRequestIds[owner];
+        for (uint256 i = 0; i < ids.length; i++) {
+            Request storage req = depositRequests[ids[i]];
+            if (req.filled > req.claimed) {
+                total += req.filled - req.claimed;
             }
         }
     }
 
     function _getFulfillableWithdrawAmount(address owner) internal view returns (uint256 total) {
-        Bucket storage b = withdrawBucket;
-        for (uint256 i = 0; i < b.tail; i++) {
-            Request storage req = withdrawRequests[i];
-            if (req.owner == owner && req.fulfilled && !req.cancelled) {
-                total += req.amount;
+        uint256[] memory ids = withdrawRequestIds[owner];
+        for (uint256 i = 0; i < ids.length; i++) {
+            Request storage req = withdrawRequests[ids[i]];
+            if (req.filled > req.claimed) {
+                total += req.filled - req.claimed;
             }
         }
     }
 
-    function mintViaAuction(address to, uint256 amount) external onlyAuctioneer {
+    function mintViaAuction(address to, uint256 amount) external onlyAuctioneer whenNotPaused {
         _dripDepositBucket();
         Bucket storage b = depositBucket;
         require(b.availableAuctionCapacity >= amount, "auction capacity exceeded");
@@ -391,6 +414,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function burnViaAuction(address winner, uint256 burnAmount, uint256 payoutAmount) external onlyAuctioneer {
+        if (payoutAmount > burnAmount) revert PayoutExceedsBurn();
         _dripWithdrawBucket();
         Bucket storage b = withdrawBucket;
         require(b.availableAuctionCapacity >= burnAmount, "auction capacity exceeded");
@@ -406,17 +430,27 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function setDepositBucketParams(uint256 rate, uint256 capacity) external onlyGovernance {
+        if (rate == 0) revert InvalidBucketParams();
         _dripDepositBucket();
+        if (capacity < depositBucket.pendingAmount) revert InvalidBucketParams();
         depositBucket.rate = rate;
         depositBucket.capacity = capacity;
         emit BucketParamsUpdated(true, rate, capacity);
     }
 
     function setWithdrawBucketParams(uint256 rate, uint256 capacity) external onlyGovernance {
+        if (rate == 0) revert InvalidBucketParams();
         _dripWithdrawBucket();
+        if (capacity < withdrawBucket.pendingAmount) revert InvalidBucketParams();
         withdrawBucket.rate = rate;
         withdrawBucket.capacity = capacity;
         emit BucketParamsUpdated(false, rate, capacity);
+    }
+
+    function setCancellationPenaltyBps(uint256 penaltyBps) external onlyGovernance {
+        if (penaltyBps > MAX_CANCELLATION_PENALTY_BPS) revert InvalidPenalty();
+        cancellationPenaltyBps = penaltyBps;
+        emit CancellationPenaltyUpdated(penaltyBps);
     }
 
     function proposeGovernance(address newGovernance) external onlyGovernance {
@@ -433,9 +467,28 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         _pendingGovernance = address(0);
     }
 
-    function setAuthorizedAuctioneer(address newAuctioneer) external onlyGovernance {
-        emit AuthorizedAuctioneerChanged(authorizedAuctioneer, newAuctioneer);
-        authorizedAuctioneer = newAuctioneer;
+    function proposeAuctioneer(address newAuctioneer) external onlyGovernance {
+        if (newAuctioneer == address(0)) revert ZeroAddress();
+        _pendingAuctioneer = newAuctioneer;
+        emit PendingAuctioneerProposed(newAuctioneer);
+    }
+
+    function acceptAuctioneer() external {
+        if (msg.sender != _pendingAuctioneer) revert NotAuctioneer();
+        emit AuthorizedAuctioneerChanged(authorizedAuctioneer, msg.sender);
+        emit AuctioneerAccepted(msg.sender);
+        authorizedAuctioneer = msg.sender;
+        _pendingAuctioneer = address(0);
+    }
+
+    function pause() external onlyGovernance {
+        paused = true;
+        emit PauseChanged(true);
+    }
+
+    function unpause() external onlyGovernance {
+        paused = false;
+        emit PauseChanged(false);
     }
 
     function drip() external {
@@ -464,6 +517,14 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
 
     function withdrawBucketCapacity() external view returns (uint256) {
         return withdrawBucket.capacity;
+    }
+
+    function depositAuctionCapacity() external view returns (uint256) {
+        return depositBucket.availableAuctionCapacity;
+    }
+
+    function withdrawAuctionCapacity() external view returns (uint256) {
+        return withdrawBucket.availableAuctionCapacity;
     }
 
     function getDepositRequest(uint256 requestId) external view returns (Request memory) {

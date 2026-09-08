@@ -34,7 +34,7 @@ contract VqALCXInvariantTest is StdInvariant, Test {
 
         handler = new VqALCXHandler(address(vault), address(alcx));
 
-        bytes4[] memory selectors = new bytes4[](7);
+        bytes4[] memory selectors = new bytes4[](8);
         selectors[0] = handler.requestDeposit.selector;
         selectors[1] = handler.requestWithdraw.selector;
         selectors[2] = handler.deposit.selector;
@@ -42,6 +42,7 @@ contract VqALCXInvariantTest is StdInvariant, Test {
         selectors[4] = handler.cancelDepositRequest.selector;
         selectors[5] = handler.advanceTime.selector;
         selectors[6] = handler.requestWithdraw.selector; // weight withdraws
+        selectors[7] = handler.cancelWithdrawRequest.selector;
 
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
         targetContract(address(handler));
@@ -107,10 +108,10 @@ contract VqALCXInvariantTest is StdInvariant, Test {
     // INV-Q-7: head <= tail always (no underflow)
     // ------------------------------------------------------------------
     function invariant_HeadLeTail() public view {
-        (, , uint256 dHead, uint256 dTail,,, ) = vault.depositBucket();
+        (,, uint256 dHead, uint256 dTail,,,) = vault.depositBucket();
         assertLe(dHead, dTail, "INV-Q-7: deposit head > tail");
 
-        (, , uint256 wHead, uint256 wTail,,, ) = vault.withdrawBucket();
+        (,, uint256 wHead, uint256 wTail,,,) = vault.withdrawBucket();
         assertLe(wHead, wTail, "INV-Q-7: withdraw head > tail");
     }
 }

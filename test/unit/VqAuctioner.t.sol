@@ -34,9 +34,11 @@ contract VqAuctionerTest is Test {
 
         auctioner = new VqAuctioner(address(alcx), address(vault), treasury, ROUND_DURATION);
 
-        // Set auctioneer on vault
+        // Set auctioneer on vault via two-step transfer
         vm.prank(governance);
-        vault.setAuthorizedAuctioneer(address(auctioner));
+        vault.proposeAuctioneer(address(auctioner));
+        vm.prank(address(auctioner));
+        vault.acceptAuctioneer();
 
         // Set bucket params
         vm.prank(governance);
@@ -57,6 +59,35 @@ contract VqAuctionerTest is Test {
         alcx.approve(address(vault), type(uint256).max);
         alcx.approve(address(auctioner), type(uint256).max);
         vm.stopPrank();
+    }
+
+    function _deploySlowBuckets() internal returns (VqALCX vault2, VqAuctioner auctioner2, MockALCX alcx2) {
+        alcx2 = new MockALCX();
+        vault2 = new VqALCX(address(alcx2), governance, address(0));
+        auctioner2 = new VqAuctioner(address(alcx2), address(vault2), treasury, 100);
+        vm.prank(governance);
+        vault2.proposeAuctioneer(address(auctioner2));
+        vm.prank(address(auctioner2));
+        vault2.acceptAuctioneer();
+        vm.prank(governance);
+        vault2.setDepositBucketParams(10e18, 10_000e18);
+        vm.prank(governance);
+        vault2.setWithdrawBucketParams(10e18, 10_000e18);
+
+        alcx2.mint(alice, 1_000_000e18);
+        alcx2.mint(bob, 1_000_000e18);
+        alcx2.mint(address(vault2), 10_000e18);
+        vm.startPrank(alice);
+        alcx2.approve(address(vault2), type(uint256).max);
+        alcx2.approve(address(auctioner2), type(uint256).max);
+        vault2.approve(address(auctioner2), type(uint256).max);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        alcx2.approve(address(vault2), type(uint256).max);
+        alcx2.approve(address(auctioner2), type(uint256).max);
+        vm.stopPrank();
+
+        return (vault2, auctioner2, alcx2);
     }
 
     // ------------------------------------------------------------------
@@ -88,6 +119,12 @@ contract VqAuctionerTest is Test {
         assertEq(round.highestBidder, alice);
         assertEq(round.highestBidAmount, 1000e18);
         assertEq(round.highestBidPrice, 1050e18);
+    }
+
+    function test_DepositBidRequiresPriceAboveBase() public {
+        vm.prank(alice);
+        vm.expectRevert(VqAuctioner.InvalidPrice.selector);
+        auctioner.bidDeposit(1000e18, 999e18);
     }
 
     function test_DepositBidOutbids() public {
@@ -192,6 +229,12 @@ contract VqAuctionerTest is Test {
         assertEq(round.highestBidPrice, 970e18);
     }
 
+    function test_WithdrawBidRequiresPayoutAtOrBelowBase() public {
+        vm.prank(alice);
+        vm.expectRevert(VqAuctioner.InvalidPrice.selector);
+        auctioner.bidWithdraw(1000e18, 1001e18);
+    }
+
     function test_WithdrawAuctionSettlement() public {
         // Setup: get alice vqALCX via deposit
         vm.warp(block.timestamp + 100);
@@ -224,6 +267,116 @@ contract VqAuctionerTest is Test {
 
         // 30 ALCX stays in vault (discount = protocol profit)
         assertGe(alcx.balanceOf(address(vault)), 30e18);
+    }
+
+    // ------------------------------------------------------------------
+    // Partial settlement when auction capacity is short
+    // ------------------------------------------------------------------
+
+    function test_DepositSettlementPartiallyFillsWhenCapacityIsShort() public {
+        (VqALCX vault2, VqAuctioner auctioner2, MockALCX alcx2) = _deploySlowBuckets();
+
+        vm.prank(bob);
+        vault2.requestDeposit(900e18);
+
+        vm.prank(alice);
+        auctioner2.bidDeposit(1000e18, 1100e18);
+
+        vm.warp(block.timestamp + 101);
+
+        uint256 aliceBefore = alcx2.balanceOf(alice);
+        uint256 treasuryBefore = alcx2.balanceOf(treasury);
+        auctioner2.settleDepositRound(1);
+
+        // 1010 budget - 900 queue = 110 capacity: partial fill
+        assertEq(vault2.balanceOf(alice), 110e18);
+        assertEq(alcx2.balanceOf(treasury), treasuryBefore + 11e18);
+        assertEq(alcx2.balanceOf(alice), aliceBefore + 979e18);
+        assertEq(alcx2.balanceOf(address(auctioner2)), 0);
+
+        VqAuctioner.Round memory round = auctioner2.getDepositRound(1);
+        assertTrue(round.settled);
+        assertEq(round.totalFilled, 110e18);
+        assertEq(auctioner2.currentDepositRound(), 2);
+    }
+
+    function test_DepositSettlementRefundsWinnerWhenCapacityIsZero() public {
+        (VqALCX vault2, VqAuctioner auctioner2, MockALCX alcx2) = _deploySlowBuckets();
+
+        vm.prank(bob);
+        vault2.requestDeposit(2000e18);
+
+        vm.prank(alice);
+        auctioner2.bidDeposit(1000e18, 1100e18);
+
+        vm.warp(block.timestamp + 101);
+
+        uint256 aliceBefore = alcx2.balanceOf(alice);
+        auctioner2.settleDepositRound(1);
+
+        assertEq(vault2.balanceOf(alice), 0);
+        assertEq(alcx2.balanceOf(alice), aliceBefore + 1100e18);
+        assertEq(alcx2.balanceOf(address(auctioner2)), 0);
+
+        VqAuctioner.Round memory round = auctioner2.getDepositRound(1);
+        assertTrue(round.settled);
+        assertEq(round.totalFilled, 0);
+        assertEq(auctioner2.currentDepositRound(), 2);
+    }
+
+    function test_WithdrawSettlementPartiallyFillsWhenCapacityIsShort() public {
+        (VqALCX vault2, VqAuctioner auctioner2, MockALCX alcx2) = _deploySlowBuckets();
+
+        deal(address(vault2), bob, 100e18);
+        deal(address(vault2), alice, 1000e18);
+
+        vm.prank(bob);
+        vault2.requestWithdraw(100e18);
+
+        vm.prank(alice);
+        auctioner2.bidWithdraw(1000e18, 1000e18);
+
+        vm.warp(block.timestamp + 101);
+
+        uint256 aliceAlcxBefore = alcx2.balanceOf(alice);
+        auctioner2.settleWithdrawRound(1);
+
+        // 1010 budget - 100 queue = 910 capacity: partial fill
+        assertEq(alcx2.balanceOf(alice), aliceAlcxBefore + 910e18);
+        assertEq(vault2.balanceOf(alice), 90e18);
+        assertEq(vault2.balanceOf(address(auctioner2)), 0);
+
+        VqAuctioner.Round memory round = auctioner2.getWithdrawRound(1);
+        assertTrue(round.settled);
+        assertEq(round.totalFilled, 910e18);
+        assertEq(auctioner2.currentWithdrawRound(), 2);
+    }
+
+    function test_WithdrawSettlementRefundsWinnerWhenCapacityIsZero() public {
+        (VqALCX vault2, VqAuctioner auctioner2, MockALCX alcx2) = _deploySlowBuckets();
+
+        deal(address(vault2), bob, 1100e18);
+        deal(address(vault2), alice, 1000e18);
+
+        vm.prank(bob);
+        vault2.requestWithdraw(1100e18);
+
+        vm.prank(alice);
+        auctioner2.bidWithdraw(1000e18, 1000e18);
+
+        vm.warp(block.timestamp + 101);
+
+        uint256 aliceAlcxBefore = alcx2.balanceOf(alice);
+        auctioner2.settleWithdrawRound(1);
+
+        assertEq(vault2.balanceOf(alice), 1000e18);
+        assertEq(alcx2.balanceOf(alice), aliceAlcxBefore);
+        assertEq(vault2.balanceOf(address(auctioner2)), 0);
+
+        VqAuctioner.Round memory round = auctioner2.getWithdrawRound(1);
+        assertTrue(round.settled);
+        assertEq(round.totalFilled, 0);
+        assertEq(auctioner2.currentWithdrawRound(), 2);
     }
 
     // ------------------------------------------------------------------

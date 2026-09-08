@@ -286,7 +286,7 @@ contract VqStakingTest is Test {
     }
 
     function test_RewardsAccrueBeforeStake() public {
-        // Push rewards when nobody is staked — should be ignored (no shares)
+        // Push rewards when nobody is staked — carried to the next staker
         rewardToken.transfer(address(staking), 100e18);
 
         _depositVqALCX(alice, 1000e18);
@@ -294,15 +294,36 @@ contract VqStakingTest is Test {
         vm.prank(alice);
         staking.stake(1000e18);
 
-        // Alice should NOT get the pre-stake rewards
+        // Nothing accrued yet at stake time
         assertEq(staking.earned(alice), 0);
 
-        // New rewards should accrue to Alice
+        // Alice receives both the carried rewards and the new rewards
         rewardToken.transfer(address(staking), 50e18);
 
         vm.prank(alice);
         staking.claimRewards();
-        assertApproxEqAbs(rewardToken.balanceOf(alice), 50e18, 1);
+        assertApproxEqAbs(rewardToken.balanceOf(alice), 150e18, 1);
+    }
+
+    function test_RewardsDuringZeroStakeWindowCarryToNextStaker() public {
+        _depositVqALCX(alice, 1000e18);
+
+        vm.prank(alice);
+        staking.stake(1000e18);
+
+        vm.prank(alice);
+        staking.unstake(1000e18);
+
+        rewardToken.transfer(address(staking), 700e18);
+
+        _depositVqALCX(bob, 500e18);
+
+        vm.prank(bob);
+        staking.stake(500e18);
+
+        vm.prank(bob);
+        staking.claimRewards();
+        assertApproxEqAbs(rewardToken.balanceOf(bob), 700e18, 1);
     }
 
     function test_RewardsProportionalToStake() public {

@@ -88,6 +88,13 @@ contract VqALCXHandler is Test {
         vm.stopPrank();
     }
 
+    function cancelWithdrawRequest(uint256 actorSeed, uint256 requestId) public useActor(actorSeed) {
+        requestId = bound(requestId, 0, 100);
+        vm.startPrank(currentActor);
+        try vault.cancelWithdrawRequest(requestId) {} catch {}
+        vm.stopPrank();
+    }
+
     function advanceTime(uint256 timeSeed) public {
         uint256 time = bound(timeSeed, 1, 1 hours);
         vm.warp(block.timestamp + time);
