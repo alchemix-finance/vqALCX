@@ -1,0 +1,14 @@
+Diff in test/audit/SystemAudit.t.sol:
+97  97   |                     amount = 1 + amount % (req.filled - req.claimed);
+98  98   |                     vm.startPrank(u);
+99  99   |                     if (dep) {
+100      |-                        if (x % 2 == 0) { v.deposit(amount, u); } else { v.mint(amount, u); }
+    100  |+                        if (x % 2 == 0) v.deposit(amount, u);
+    101  |+                        else v.mint(amount, u);
+101 102  |                     } else {
+102      |-                        if (x % 2 == 0) { v.withdraw(amount, u, u); } else { v.redeem(amount, u, u); }
+    103  |+                        if (x % 2 == 0) v.withdraw(amount, u, u);
+    104  |+                        else v.redeem(amount, u, u);
+103 105  |                     }
+104 106  |                     vm.stopPrank();
+105 107  |                     ok = true;

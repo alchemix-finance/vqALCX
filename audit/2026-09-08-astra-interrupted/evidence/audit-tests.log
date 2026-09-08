@@ -1,0 +1,160 @@
+Compiling 1 files with Solc 0.8.36
+Solc 0.8.36 finished in 391.67ms
+Compiler run successful with warnings:
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:129:5:
+    |
+129 |     function at(Trace256 storage self, uint32 index) internal view returns (Checkpoint256 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:344:5:
+    |
+344 |     function at(Trace224 storage self, uint32 index) internal view returns (Checkpoint224 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:559:5:
+    |
+559 |     function at(Trace208 storage self, uint32 index) internal view returns (Checkpoint208 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:774:5:
+    |
+774 |     function at(Trace160 storage self, uint32 index) internal view returns (Checkpoint160 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+2026-09-08T10:24:04.429665Z  WARN evm::traces::external: etherscan config not found
+
+Ran 20 tests for test/audit/AuctionAudit.t.sol:AuctionAuditTest
+[PASS] testFuzz_DepositSettlementConservesEscrowAndBacking(uint96,uint96,uint96) (runs: 512, μ: 739742, ~: 750185)
+[PASS] testFuzz_WithdrawSettlementConservesEscrowAndBacking(uint96,uint96,uint96) (runs: 512, μ: 715135, ~: 728446)
+[PASS] test_DepositReplacementSelfReplacementAndReturningBidderConserveEscrow() (gas: 782404)
+[PASS] test_EmptyRoundsAdvanceAndCannotBeSettledTwice() (gas: 587850)
+[PASS] test_ExpiredRoundCanBeOutbidAndSettledAtExactEndTimestamp() (gas: 669206)
+[PASS] test_FailedRefundLeavesOldBidIntact() (gas: 439739)
+[PASS] test_FailedTreasuryPaymentRollsBackBackingMintAndRound() (gas: 675683)
+[PASS] test_NormalReplacementStrandsBothLiveEscrows() (gas: 1144630)
+[PASS] test_OneWeiWithdrawalOutbidsHundredTokenDiscountAtPar() (gas: 604636)
+[PASS] test_PauseBlocksDepositFillButWithdrawalAndLaterRecoverySucceed() (gas: 1052786)
+[PASS] test_PausedZeroFillDepositCanRefund() (gas: 658461)
+[PASS] test_QuantityIncreaseOutbidsHigherDepositRevenueWithZeroPremium() (gas: 625244)
+[PASS] test_RegisteredReplacementCannotCallAcceptanceFunction() (gas: 2477410)
+[PASS] test_ReplacementCreditExhaustionCanRescueOldBidsViaZeroFill() (gas: 1288430)
+[PASS] test_RetiredAuctionStillAcceptsNewFundedBids() (gas: 1118392)
+[PASS] test_TokenCallbackCannotReenterBidOrSettlement() (gas: 725451)
+[PASS] test_TokenCallbackToEnsureCanSkipEmptyRoundButNoEscrowLost() (gas: 801213)
+[PASS] test_WithdrawReplacementSelfReplacementAndReturningBidderConserveEscrow() (gas: 717832)
+[PASS] test_ZeroInitialAuctioneerCannotBeBootstrappedWithStockImplementation() (gas: 7118085)
+[PASS] test_ZeroPriceOneWeiWithdrawalCannotBeOutbid() (gas: 492433)
+Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 102.91ms (199.74ms CPU time)
+
+Ran 21 tests for test/audit/StakingAudit.t.sol:StakingAuditTest
+[PASS] testFuzz_ExactFundingConservesAcrossCohortsAndClaimOrder(uint32,uint32,uint32,uint32,bool) (runs: 512, μ: 624186, ~: 624155)
+[PASS] test_AccrualFragmentationPermanentlyStrandsOtherwiseDistributableRewards() (gas: 6135694)
+[PASS] test_ClockModeDoesNotDescribeTimestampClock() (gas: 13425)
+[PASS] test_DelegateBySigHonorsNonceExpiryAndDomain() (gas: 3544564)
+[PASS] test_DirectShareDonationDoesNotCreateVotingUnits() (gas: 393632)
+[PASS] test_EarnedExcludesUnaccruedFunding() (gas: 372843)
+[PASS] test_FalseReturnRewardTransferRollsBackClaim() (gas: 428373)
+[PASS] test_FundingAtZeroStakeBelongsToFirstSubsequentStaker() (gas: 724376)
+[PASS] test_HistoricalSnapshotSurvivesNextTimestampExitAndTransfer() (gas: 707569)
+[PASS] test_MissingReturnRewardTransferIsSupported() (gas: 393269)
+[PASS] test_NegativeRewardBalanceChangeBlocksPrincipalExitUntilRecapitalized() (gas: 567405)
+[PASS] test_PostTransferCallbackPreservesAccounting() (gas: 583292)
+[PASS] test_PreTransferCallbackRecreditsPaidRewardsAndBlocksOtherStaker() (gas: 581424)
+[PASS] test_RecipientFeeAccruesReceivedFundingButClaimIsTaxedAgain() (gas: 409883)
+[PASS] test_RepresentativeGovernorDelegateOverrideUsesHistoricalStake() (gas: 6084586)
+[PASS] test_RepresentativeGovernorOverrideBeforeDelegateVoteCountsOnce() (gas: 6082512)
+[PASS] test_RevertingRewardBalanceQueryBlocksPrincipalExit() (gas: 293883)
+[PASS] test_SameTimestampAcquisitionAndExitHasNoHistoricalVotes() (gas: 384780)
+[PASS] test_SenderFeeOnClaimCreatesBalanceDeficitAndBlocksPrincipalExit() (gas: 570577)
+[PASS] test_StakeBeyondVotesUint208LimitRevertsAtomically() (gas: 156579)
+[PASS] test_UserSettlementDropsFractionOnRepeatedStakeChanges() (gas: 605276)
+Suite result: ok. 21 passed; 0 failed; 0 skipped; finished in 135.64ms (146.89ms CPU time)
+
+Ran 7 tests for test/audit/VaultAudit.t.sol:VaultAuditTest
+[PASS] test_AuctionBurnWithdrawEventSwapsAssetsAndShares() (gas: 380523)
+[PASS] test_CancelledQueueBacklogCannotProgressWithin30MillionGas() (gas: 725098668)
+Logs:
+  cold gas for 5001 cancelled entries: 37126216
+
+[PASS] test_ElapsedCancellationAndStaleViews() (gas: 209511)
+[PASS] test_MaxDepositAndMintExceedSingleRequestClaim() (gas: 493149)
+[PASS] test_MaxWithdrawAndRedeemExceedSingleRequestClaim() (gas: 647973)
+[PASS] test_OverflowingRateBlocksCorrectionAndUnrelatedClaim() (gas: 512414)
+[PASS] test_PartialCancellationRetainsClaimsAndAllowanceIsAtomic() (gas: 595928)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 207.41ms (206.03ms CPU time)
+
+Ran 2 tests for test/audit/SystemAudit.t.sol:SystemAuditTest
+[PASS] testFuzz_SystemConservationAndLastUserExit(uint256) (runs: 513, μ: 28456335, ~: 28256215)
+[PASS] test_SystemTransitionEvidence() (gas: 187942112)
+Logs:
+  operation: 0
+  successful: 21
+  inapplicable: 0
+  operation: 1
+  successful: 17
+  inapplicable: 0
+  operation: 2
+  successful: 11
+  inapplicable: 7
+  operation: 3
+  successful: 10
+  inapplicable: 16
+  operation: 4
+  successful: 13
+  inapplicable: 13
+  operation: 5
+  successful: 9
+  inapplicable: 12
+  operation: 6
+  successful: 1
+  inapplicable: 17
+  operation: 7
+  successful: 1
+  inapplicable: 11
+  operation: 8
+  successful: 4
+  inapplicable: 18
+  operation: 9
+  successful: 7
+  inapplicable: 8
+  operation: 10
+  successful: 6
+  inapplicable: 13
+  operation: 11
+  successful: 10
+  inapplicable: 10
+  operation: 12
+  successful: 29
+  inapplicable: 0
+  operation: 13
+  successful: 18
+  inapplicable: 2
+  operation: 14
+  successful: 27
+  inapplicable: 0
+  operation: 15
+  successful: 12
+  inapplicable: 4
+  operation: 16
+  successful: 28
+  inapplicable: 0
+  operation: 17
+  successful: 33
+  inapplicable: 0
+  operation: 18
+  successful: 19
+  inapplicable: 0
+  operation: 19
+  successful: 27
+  inapplicable: 0
+  operation: 20
+  successful: 14
+  inapplicable: 0
+
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 14.56s (14.73s CPU time)
+
+Ran 4 test suites in 14.57s (15.00s CPU time): 50 tests passed, 0 failed, 0 skipped (50 total tests)

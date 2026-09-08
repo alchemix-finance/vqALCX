@@ -1,0 +1,41 @@
+{
+  "commit": "5bfb483025e65ab0a88912eda5295849e6bf944c",
+  "snapshot": "/tmp/vqalcx-review-8EdnZ3n0",
+  "files": [
+    {
+      "path": "src/VqALCX.sol",
+      "sha256": "9faabaa3933a9773d021f5850c7eaec61b12b12700cc9732a679a0520d02c3a5",
+      "snapshot_matches": true
+    },
+    {
+      "path": "src/VqAuctioner.sol",
+      "sha256": "03f2d24ec21472f5af7b41f33ef047200a559a5dae633916160cebe19c01ff0e",
+      "snapshot_matches": true
+    },
+    {
+      "path": "src/VqStaking.sol",
+      "sha256": "5be30ee44b311295e9fa42d93d4d9aca0c2aa39594e36a2ec679c554a7a19403",
+      "snapshot_matches": true
+    },
+    {
+      "path": "foundry.toml",
+      "sha256": "89d8507bd5401d1eda89450dfb10e47f9289d2a7506bd042e46d331156ddd0e3",
+      "snapshot_matches": true
+    },
+    {
+      "path": "foundry.lock",
+      "sha256": "f28d48928209d86f8ed55a2fa0c422dc4ded797fbc9fb6a65c0d75e5606a942b",
+      "snapshot_matches": true
+    }
+  ],
+  "production_diff_empty": true,
+  "system_test_sha256": "01fce44dd59f9e9aea955ac8b2c415524ab9a6c61abfdc4f5ea8d97317b18649",
+  "system_seed": "0x20260908",
+  "system_runs": 1024,
+  "generated_actions_per_run": 126,
+  "specialist_status": {
+    "vault": "service filter stopped targeted validation",
+    "auction": "service filter stopped targeted validation",
+    "staking": "19-test execution log completed; service filter stopped reviewer completion"
+  }
+}

@@ -1,0 +1,298 @@
+Compiling 61 files with Solc 0.8.36
+Solc 0.8.36 finished in 687.23ms
+Compiler run successful with warnings:
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:129:5:
+    |
+129 |     function at(Trace256 storage self, uint32 index) internal view returns (Checkpoint256 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:344:5:
+    |
+344 |     function at(Trace224 storage self, uint32 index) internal view returns (Checkpoint224 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:559:5:
+    |
+559 |     function at(Trace208 storage self, uint32 index) internal view returns (Checkpoint208 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:774:5:
+    |
+774 |     function at(Trace160 storage self, uint32 index) internal view returns (Checkpoint160 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (2018): Function state mutability can be restricted to view
+   --> test/unit/VqALCX.t.sol:340:5:
+    |
+340 |     function test_ConvertToSharesAndAssets() public {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+
+╭----------------------------------------+------------------+-------------------+--------------------+---------------------╮
+| Contract                               | Runtime Size (B) | Initcode Size (B) | Runtime Margin (B) | Initcode Margin (B) |
++==========================================================================================================================+
+| Bytes                                  | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| Checkpoints                            | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| ECDSA                                  | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| ERC6372Utils                           | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| Math                                   | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| MessageHashUtils                       | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| MockALCX (test/unit/VqALCX.t.sol)      | 3,734            | 4,707             | 20,842             | 44,445              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| MockALCX (test/unit/VqAuctioner.t.sol) | 3,734            | 4,707             | 20,842             | 44,445              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| MockALCX (test/unit/VqStaking.t.sol)   | 3,734            | 4,707             | 20,842             | 44,445              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| MockALCXInvariant                      | 3,554            | 4,527             | 21,022             | 44,625              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| MockRewardToken                        | 3,734            | 4,707             | 20,842             | 44,445              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| Panic                                  | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| SafeCast                               | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| SafeERC20                              | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| ShortStrings                           | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| SignedMath                             | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| StorageSlot                            | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| Strings                                | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| Time                                   | 85               | 160               | 24,491             | 48,992              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| VqALCX                                 | 20,013           | 21,696            | 4,563              | 27,456              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| VqAuctioner                            | 11,634           | 12,410            | 12,942             | 36,742              |
+|----------------------------------------+------------------+-------------------+--------------------+---------------------|
+| VqStaking                              | 14,476           | 16,017            | 10,100             | 33,135              |
+╰----------------------------------------+------------------+-------------------+--------------------+---------------------╯
+
+note[screaming-snake-case-immutable]: immutables should use SCREAMING_SNAKE_CASE
+  --> src/VqStaking.sol:19:29
+   |
+19 |     IERC20 public immutable vqALCX;
+   |                             ^^^^^^ help: consider using: `VQ_ALCX`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#screaming-snake-case-immutable
+
+note[mixed-case-function]: function names should use mixedCase
+  --> test/unit/VqStaking.t.sol:66:14
+   |
+66 |     function _depositVqALCX(address user, uint256 amount) internal {
+   |              ^^^^^^^^^^^^^^ help: consider using: `_depositVqAlcx`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#mixed-case-function
+
+warning[unsafe-typecast]: typecasts that can truncate values should be checked
+  --> test/invariant/handlers/VqALCXHandler.sol:26:37
+   |
+26 |             address actor = address(uint160(0x1000 + i));
+   |                                     ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: consider disabling this lint if you're certain the cast is safe
+           
+           // casting to 'uint160' is safe because [explain why]
+           // forge-lint: disable-next-line(unsafe-typecast)
+           
+           
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#unsafe-typecast
+
+note[screaming-snake-case-immutable]: immutables should use SCREAMING_SNAKE_CASE
+  --> src/VqAuctioner.sol:42:29
+   |
+42 |     IERC20 public immutable alcx;
+   |                             ^^^^ help: consider using: `ALCX`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#screaming-snake-case-immutable
+
+note[screaming-snake-case-immutable]: immutables should use SCREAMING_SNAKE_CASE
+  --> src/VqAuctioner.sol:43:29
+   |
+43 |     IERC20 public immutable vqALCX;
+   |                             ^^^^^^ help: consider using: `VQ_ALCX`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#screaming-snake-case-immutable
+
+note[screaming-snake-case-immutable]: immutables should use SCREAMING_SNAKE_CASE
+  --> src/VqAuctioner.sol:44:30
+   |
+44 |     IVqALCX public immutable vault;
+   |                              ^^^^^ help: consider using: `VAULT`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#screaming-snake-case-immutable
+
+note[screaming-snake-case-immutable]: immutables should use SCREAMING_SNAKE_CASE
+  --> src/VqALCX.sol:30:31
+   |
+30 |     IERC20 internal immutable _asset;
+   |                               ^^^^^^ help: consider using: `_ASSET`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#screaming-snake-case-immutable
+
+note[screaming-snake-case-immutable]: immutables should use SCREAMING_SNAKE_CASE
+  --> src/VqStaking.sol:20:29
+   |
+20 |     IERC20 public immutable rewardToken;
+   |                             ^^^^^^^^^^^ help: consider using: `REWARD_TOKEN`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#screaming-snake-case-immutable
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> test/invariant/VqALCX.invariant.t.sol:102:17
+    |
+102 |                 vault.transfer(actor, 0); // zero transfer always succeeds
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> test/unit/VqStaking.t.sol:257:9
+    |
+257 |         rewardToken.transfer(address(staking), 100e18);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+note[mixed-case-variable]: mutable variables should use mixedCase
+  --> src/VqStaking.sol:54:25
+   |
+54 |     constructor(address _vqALCX, address _rewardToken) EIP712("VqStaking", "1") {
+   |                         ^^^^^^^ help: consider using: `_vqAlcx`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#mixed-case-variable
+
+note[mixed-case-function]: function names should use mixedCase
+  --> src/VqStaking.sol:69:14
+   |
+69 |     function CLOCK_MODE() public view virtual override returns (string memory) {
+   |              ^^^^^^^^^^ help: consider using: `clockMode`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#mixed-case-function
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> test/unit/VqStaking.t.sol:277:9
+    |
+277 |         rewardToken.transfer(address(staking), 100e18);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+note[mixed-case-variable]: mutable variables should use mixedCase
+  --> src/VqAuctioner.sol:76:40
+   |
+76 |     constructor(address _alcx, address _vqALCX, address _daoTreasury, uint256 _roundDuration) {
+   |                                        ^^^^^^^ help: consider using: `_vqAlcx`
+   |
+   = help: https://book.getfoundry.sh/reference/forge/forge-lint#mixed-case-variable
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> test/unit/VqStaking.t.sol:295:9
+    |
+295 |         rewardToken.transfer(address(staking), 100e18);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> test/unit/VqStaking.t.sol:306:9
+    |
+306 |         rewardToken.transfer(address(staking), 50e18);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> test/unit/VqStaking.t.sol:322:9
+    |
+322 |         rewardToken.transfer(address(staking), 700e18);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> test/unit/VqStaking.t.sol:345:9
+    |
+345 |         rewardToken.transfer(address(staking), 400e18);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+note[unwrapped-modifier-logic]: wrap modifier logic to reduce code size
+   --> src/VqALCX.sol:97:5
+    |
+ 97 | /     modifier onlyGovernance() {
+ 98 | |         if (msg.sender != governanceAddress) revert NotGovernance();
+ 99 | |         _;
+100 | |     }
+    | |_____^
+    |
+help: wrap modifier logic to reduce code size
+    |
+ 97 ~     modifier onlyGovernance() {
+ 98 +         _onlyGovernance();
+ 99 +         _;
+100 +     }
+101 + 
+102 +     function _onlyGovernance() internal {
+103 +         if (msg.sender != governanceAddress) revert NotGovernance();
+104 +     }
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#unwrapped-modifier-logic
+
+note[unwrapped-modifier-logic]: wrap modifier logic to reduce code size
+   --> src/VqALCX.sol:102:5
+    |
+102 | /     modifier onlyAuctioneer() {
+103 | |         if (msg.sender != authorizedAuctioneer) revert NotAuctioneer();
+104 | |         _;
+105 | |     }
+    | |_____^
+    |
+help: wrap modifier logic to reduce code size
+    |
+102 ~     modifier onlyAuctioneer() {
+103 +         _onlyAuctioneer();
+104 +         _;
+105 +     }
+106 + 
+107 +     function _onlyAuctioneer() internal {
+108 +         if (msg.sender != authorizedAuctioneer) revert NotAuctioneer();
+109 +     }
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#unwrapped-modifier-logic
+
+note[unwrapped-modifier-logic]: wrap modifier logic to reduce code size
+   --> src/VqALCX.sol:107:5
+    |
+107 | /     modifier whenNotPaused() {
+108 | |         if (paused) revert EnforcedPause();
+109 | |         _;
+110 | |     }
+    | |_____^
+    |
+help: wrap modifier logic to reduce code size
+    |
+107 ~     modifier whenNotPaused() {
+108 +         _whenNotPaused();
+109 +         _;
+110 +     }
+111 + 
+112 +     function _whenNotPaused() internal {
+113 +         if (paused) revert EnforcedPause();
+114 +     }
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#unwrapped-modifier-logic
+

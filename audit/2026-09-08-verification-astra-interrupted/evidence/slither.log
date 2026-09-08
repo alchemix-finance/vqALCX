@@ -1,0 +1,158 @@
+
+Detector: incorrect-equality
+VqALCX._dripDepositBucket() (src/VqALCX.sol#112-138) uses a dangerous strict equality:
+	- elapsed == 0 (src/VqALCX.sol#115)
+VqALCX._dripDepositBucket() (src/VqALCX.sol#112-138) uses a dangerous strict equality:
+	- req.filled == req.amount (src/VqALCX.sol#131)
+VqALCX._dripWithdrawBucket() (src/VqALCX.sol#140-165) uses a dangerous strict equality:
+	- elapsed == 0 (src/VqALCX.sol#143)
+VqALCX._dripWithdrawBucket() (src/VqALCX.sol#140-165) uses a dangerous strict equality:
+	- req.filled == req.amount (src/VqALCX.sol#159)
+VqStaking.claimRewards() (src/VqStaking.sol#161-174) uses a dangerous strict equality:
+	- reward == 0 (src/VqStaking.sol#164)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
+
+Detector: reentrancy-no-eth
+Reentrancy in VqAuctioner.settleDepositRound(uint256) (src/VqAuctioner.sol#217-263):
+	External calls:
+	- vault.drip() (src/VqAuctioner.sol#238)
+	- vault.mintViaAuction(winner,fill) (src/VqAuctioner.sol#249)
+	State variables written after the call(s):
+	- _startDepositRound() (src/VqAuctioner.sol#262)
+		- roundId = ++ currentDepositRound (src/VqAuctioner.sol#85)
+	VqAuctioner.currentDepositRound (src/VqAuctioner.sol#49) can be used in cross function reentrancies:
+	- VqAuctioner._startDepositRound() (src/VqAuctioner.sol#84-103)
+	- VqAuctioner.currentDepositRound (src/VqAuctioner.sol#49)
+	- VqAuctioner.ensureDepositRound() (src/VqAuctioner.sol#126-131)
+	- round.totalFilled = fill (src/VqAuctioner.sol#258)
+	VqAuctioner.depositRounds (src/VqAuctioner.sol#52) can be used in cross function reentrancies:
+	- VqAuctioner._startDepositRound() (src/VqAuctioner.sol#84-103)
+	- VqAuctioner.depositRounds (src/VqAuctioner.sol#52)
+	- VqAuctioner.ensureDepositRound() (src/VqAuctioner.sol#126-131)
+	- VqAuctioner.getDepositRound(uint256) (src/VqAuctioner.sol#307-309)
+	- _startDepositRound() (src/VqAuctioner.sol#262)
+		- depositRounds[roundId] = Round({roundId:roundId,isDeposit:true,startTime:block.timestamp,endTime:block.timestamp + roundDuration,capacity:capacity,totalFilled:0,settled:false,highestBidder:address(0),highestBidAmount:0,highestBidPrice:0}) (src/VqAuctioner.sol#89-100)
+	VqAuctioner.depositRounds (src/VqAuctioner.sol#52) can be used in cross function reentrancies:
+	- VqAuctioner._startDepositRound() (src/VqAuctioner.sol#84-103)
+	- VqAuctioner.depositRounds (src/VqAuctioner.sol#52)
+	- VqAuctioner.ensureDepositRound() (src/VqAuctioner.sol#126-131)
+	- VqAuctioner.getDepositRound(uint256) (src/VqAuctioner.sol#307-309)
+Reentrancy in VqAuctioner.settleWithdrawRound(uint256) (src/VqAuctioner.sol#265-305):
+	External calls:
+	- vault.drip() (src/VqAuctioner.sol#285)
+	- vault.burnViaAuction(winner,fill,payout) (src/VqAuctioner.sol#294)
+	State variables written after the call(s):
+	- _startWithdrawRound() (src/VqAuctioner.sol#304)
+		- roundId = ++ currentWithdrawRound (src/VqAuctioner.sol#106)
+	VqAuctioner.currentWithdrawRound (src/VqAuctioner.sol#50) can be used in cross function reentrancies:
+	- VqAuctioner._startWithdrawRound() (src/VqAuctioner.sol#105-124)
+	- VqAuctioner.currentWithdrawRound (src/VqAuctioner.sol#50)
+	- VqAuctioner.ensureWithdrawRound() (src/VqAuctioner.sol#133-138)
+	- round.totalFilled = fill (src/VqAuctioner.sol#300)
+	VqAuctioner.withdrawRounds (src/VqAuctioner.sol#53) can be used in cross function reentrancies:
+	- VqAuctioner._startWithdrawRound() (src/VqAuctioner.sol#105-124)
+	- VqAuctioner.ensureWithdrawRound() (src/VqAuctioner.sol#133-138)
+	- VqAuctioner.getWithdrawRound(uint256) (src/VqAuctioner.sol#311-313)
+	- VqAuctioner.withdrawRounds (src/VqAuctioner.sol#53)
+	- _startWithdrawRound() (src/VqAuctioner.sol#304)
+		- withdrawRounds[roundId] = Round({roundId:roundId,isDeposit:false,startTime:block.timestamp,endTime:block.timestamp + roundDuration,capacity:capacity,totalFilled:0,settled:false,highestBidder:address(0),highestBidAmount:0,highestBidPrice:0}) (src/VqAuctioner.sol#110-121)
+	VqAuctioner.withdrawRounds (src/VqAuctioner.sol#53) can be used in cross function reentrancies:
+	- VqAuctioner._startWithdrawRound() (src/VqAuctioner.sol#105-124)
+	- VqAuctioner.ensureWithdrawRound() (src/VqAuctioner.sol#133-138)
+	- VqAuctioner.getWithdrawRound(uint256) (src/VqAuctioner.sol#311-313)
+	- VqAuctioner.withdrawRounds (src/VqAuctioner.sol#53)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-2
+
+Detector: missing-zero-check
+VqALCX.constructor(address,address,address).auctioneer_ (src/VqALCX.sol#85) lacks a zero-check on :
+		- authorizedAuctioneer = auctioneer_ (src/VqALCX.sol#90)
+VqAuctioner.constructor(address,address,address,uint256)._daoTreasury (src/VqAuctioner.sol#76) lacks a zero-check on :
+		- daoTreasury = _daoTreasury (src/VqAuctioner.sol#80)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+
+Detector: reentrancy-benign
+Reentrancy in VqAuctioner.bidDeposit(uint256,uint256) (src/VqAuctioner.sol#140-176):
+	External calls:
+	- roundId = this.ensureDepositRound() (src/VqAuctioner.sol#143)
+	State variables written after the call(s):
+	- prevBid.price = 0 (src/VqAuctioner.sol#159)
+	- depositLockedBids[roundId][msg.sender] = LockedBid({bidder:msg.sender,amount:amount,price:maxPrice}) (src/VqAuctioner.sol#167)
+	- depositLockedTotal[roundId] -= refundAmount (src/VqAuctioner.sol#160)
+	- depositLockedTotal[roundId] += maxPrice (src/VqAuctioner.sol#168)
+	- round.highestBidder = msg.sender (src/VqAuctioner.sol#170)
+	- round.highestBidAmount = amount (src/VqAuctioner.sol#171)
+	- round.highestBidPrice = maxPrice (src/VqAuctioner.sol#172)
+Reentrancy in VqAuctioner.bidWithdraw(uint256,uint256) (src/VqAuctioner.sol#178-215):
+	External calls:
+	- roundId = this.ensureWithdrawRound() (src/VqAuctioner.sol#181)
+	State variables written after the call(s):
+	- prevBid.amount = 0 (src/VqAuctioner.sol#198)
+	- withdrawLockedBids[roundId][msg.sender] = LockedBid({bidder:msg.sender,amount:amount,price:minPrice}) (src/VqAuctioner.sol#206)
+	- withdrawLockedTotal[roundId] -= refundAmount (src/VqAuctioner.sol#199)
+	- withdrawLockedTotal[roundId] += amount (src/VqAuctioner.sol#207)
+	- round.highestBidder = msg.sender (src/VqAuctioner.sol#209)
+	- round.highestBidAmount = amount (src/VqAuctioner.sol#210)
+	- round.highestBidPrice = minPrice (src/VqAuctioner.sol#211)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
+
+Detector: timestamp
+VqALCX._dripDepositBucket() (src/VqALCX.sol#112-138) uses timestamp for comparisons
+	Dangerous comparisons:
+	- elapsed == 0 (src/VqALCX.sol#115)
+	- fulfillable > 0 && b.head < b.tail (src/VqALCX.sol#120)
+	- req.filled == req.amount (src/VqALCX.sol#131)
+	- remaining > fulfillable (src/VqALCX.sol#127)
+VqALCX._dripWithdrawBucket() (src/VqALCX.sol#140-165) uses timestamp for comparisons
+	Dangerous comparisons:
+	- elapsed == 0 (src/VqALCX.sol#143)
+	- fulfillable > 0 && b.head < b.tail (src/VqALCX.sol#148)
+	- req.filled == req.amount (src/VqALCX.sol#159)
+	- remaining > fulfillable (src/VqALCX.sol#155)
+VqALCX.mintViaAuction(address,uint256) (src/VqALCX.sol#405-414) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(b.availableAuctionCapacity >= amount,auction capacity exceeded) (src/VqALCX.sol#408)
+VqALCX.burnViaAuction(address,uint256,uint256) (src/VqALCX.sol#416-430) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(b.availableAuctionCapacity >= burnAmount,auction capacity exceeded) (src/VqALCX.sol#420)
+VqALCX.setDepositBucketParams(uint256,uint256) (src/VqALCX.sol#432-439) uses timestamp for comparisons
+	Dangerous comparisons:
+	- capacity < depositBucket.pendingAmount (src/VqALCX.sol#435)
+VqALCX.setWithdrawBucketParams(uint256,uint256) (src/VqALCX.sol#441-448) uses timestamp for comparisons
+	Dangerous comparisons:
+	- capacity < withdrawBucket.pendingAmount (src/VqALCX.sol#444)
+VqAuctioner.ensureDepositRound() (src/VqAuctioner.sol#126-131) uses timestamp for comparisons
+	Dangerous comparisons:
+	- currentDepositRound == 0 || depositRounds[currentDepositRound].settled (src/VqAuctioner.sol#127)
+VqAuctioner.ensureWithdrawRound() (src/VqAuctioner.sol#133-138) uses timestamp for comparisons
+	Dangerous comparisons:
+	- currentWithdrawRound == 0 || withdrawRounds[currentWithdrawRound].settled (src/VqAuctioner.sol#134)
+VqAuctioner.bidDeposit(uint256,uint256) (src/VqAuctioner.sol#140-176) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > round.endTime (src/VqAuctioner.sol#146)
+VqAuctioner.bidWithdraw(uint256,uint256) (src/VqAuctioner.sol#178-215) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > round.endTime (src/VqAuctioner.sol#183)
+VqAuctioner.settleDepositRound(uint256) (src/VqAuctioner.sol#217-263) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp < round.endTime (src/VqAuctioner.sol#221)
+VqAuctioner.settleWithdrawRound(uint256) (src/VqAuctioner.sol#265-305) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp < round.endTime (src/VqAuctioner.sol#269)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+
+Detector: missing-inheritance
+VqALCX (src/VqALCX.sol#9-537) should inherit from IVqALCX (src/VqAuctioner.sol#8-18)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-inheritance
+
+Detector: naming-convention
+Function VqStaking.CLOCK_MODE() (src/VqStaking.sol#69-71) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+
+Detector: immutable-states
+VqAuctioner.daoTreasury (src/VqAuctioner.sol#46) should be immutable 
+VqAuctioner.roundDuration (src/VqAuctioner.sol#47) should be immutable 
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#state-variables-that-could-be-declared-immutable
+. analyzed (37 contracts with 102 detectors), 27 result(s) found
+'forge clean' running (wd: /private/tmp/vqalcx-review-8EdnZ3n0)
+'forge config --json' running
+'forge build --build-info --deny never --skip ./test/** ./script/** --force' running (wd: /private/tmp/vqalcx-review-8EdnZ3n0)

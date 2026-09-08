@@ -1,0 +1,17 @@
+=== source file hashes (shasum -a 256) ===
+9faabaa3933a9773d021f5850c7eaec61b12b12700cc9732a679a0520d02c3a5  src/VqALCX.sol
+03f2d24ec21472f5af7b41f33ef047200a559a5dae633916160cebe19c01ff0e  src/VqAuctioner.sol
+5be30ee44b311295e9fa42d93d4d9aca0c2aa39594e36a2ec679c554a7a19403  src/VqStaking.sol
+89a79310ef4e32ff789857660e6fe7f7fc3c96d90e2375138a580c1564c4a644  test/unit/VqALCX.t.sol
+f967b31e1c6033359038d16653406e6301b0cbd808f36bfaa9745c0c20dc9f80  test/unit/VqAuctioner.t.sol
+228d5a3366a8102f9fde474ecbd0b2fb43ef022e2b17eec3425179393bd787c8  test/unit/VqStaking.t.sol
+a73122940deae56287f318f435a170ff1174619f245f80aa1aac4595d6a4228b  test/invariant/VqALCX.invariant.t.sol
+91149653225230b380d47a3f67bec58e34e29c74f0f3c5b202b1026e2ed75ce5  test/invariant/handlers/VqALCXHandler.sol
+89d8507bd5401d1eda89450dfb10e47f9289d2a7506bd042e46d331156ddd0e3  foundry.toml
+28e9bcfad13fad16e63ddac9fd35e31c9bcc9f4f8ccd6cb9314dfdfaa065bfb3  .github/workflows/test.yml
+f75732857db02f13076d3de5d3039911d2de2fa8427f0a84ca96671c369c6428  arch.md
+60c96a2d8e3bb13693f0864c1f5f25f8e1a802cd3bfb6e2622d5b2501d4f622a  AUDIT_PLAN.md
+
+=== solc in use (from forge build) ===
+Compiling 61 files with Solc 0.8.36
+Solc 0.8.36 finished in 662.16ms

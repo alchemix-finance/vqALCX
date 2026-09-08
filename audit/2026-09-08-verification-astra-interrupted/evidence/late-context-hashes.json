@@ -1,0 +1,5 @@
+{
+  "AGENTS.md": "8984862acb4991a9226c9d6443acae2765d233ca58415b65f873abcf84948755",
+  "test/audit/reaudit/StakingReaudit.t.sol": "546e87421adca05191ab3760cf516446761e9652361564078595c567dd55ad3c",
+  "test/audit/reaudit/VaultReaudit.t.sol": "c82fdf06e7fcd19dcfbf798d95b43553300b5d1152a026a8195cb41f8dadbc99"
+}

@@ -1,0 +1,16 @@
+=== HEAD ===
+5bfb483025e65ab0a88912eda5295849e6bf944c
+=== branch ===
+master
+=== diff vs planning baseline 5bfb483 ===
+(empty = identical)
+=== submodule revs ===
+ 620536fa5277db4e3fd46772d5cbc1ea0696fb43 lib/forge-std (v1.16.1)
+ cab19933c33c2ad1d4c7a84864a3601dddfd16f3 lib/openzeppelin-contracts (v4.8.0-1217-gcab19933)
+=== toolchain ===
+forge Version: 1.5.1-stable
+Commit SHA: b0a9dd9ceda36f63e2326ce530c10e6916f4b8a2
+=== worktree status ===
+?? AGENTS.md
+?? AUDIT_PLAN.md
+?? audit/

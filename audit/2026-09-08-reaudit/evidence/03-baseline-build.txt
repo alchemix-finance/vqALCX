@@ -1,0 +1,15 @@
+=== forge fmt --check ===
+exit=0
+=== forge build --sizes (tail) ===
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+
+warning[erc20-unchecked-transfer]: ERC20 'transfer' and 'transferFrom' calls should check the return value
+   --> test/unit/VqStaking.t.sol:345:9
+    |
+345 |         rewardToken.transfer(address(staking), 400e18);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: https://book.getfoundry.sh/reference/forge/forge-lint#erc20-unchecked-transfer
+

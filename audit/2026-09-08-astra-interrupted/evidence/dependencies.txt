@@ -1,0 +1,5 @@
+ 620536fa5277db4e3fd46772d5cbc1ea0696fb43 lib/forge-std (v1.16.1)
+ cab19933c33c2ad1d4c7a84864a3601dddfd16f3 lib/openzeppelin-contracts (v4.8.0-1217-gcab19933)
+ 232ff9ba8194e406967f52ecc5cb52ed764209e9 lib/openzeppelin-contracts/lib/erc4626-tests (v0.1.1)
+ 1801b0541f4fda118a10798fd3486bb7051c5dd6 lib/openzeppelin-contracts/lib/forge-std (v1.14.0)
+ 7328abe100445fc53885c21d0e713b95293cf14c lib/openzeppelin-contracts/lib/halmos-cheatcodes (7328abe)

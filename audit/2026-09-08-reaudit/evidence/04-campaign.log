@@ -1,0 +1,98 @@
+=== Campaign config: forge test, invariant default 256 runs x 500 calls/suite, fuzz-seed 0x5bfb483 ===
+[PASS] test_FINT1_ClockModeStringNonstandard() (gas: 13568)
+[PASS] test_FSTAKE1_PreStakeDonationsGoToFirstStaker() (gas: 596719)
+[PASS] test_FSTAKE2_EarnedStaleUntilAccrual() (gas: 602426)
+[PASS] test_RewardConservationAndDust() (gas: 1006407)
+[PASS] test_SubResolutionDonationsStranded() (gas: 873024)
+[PASS] test_UndelegatedStakerHasZeroVotesButBalanceCheckpoints() (gas: 649123)
+Suite result: ok. 6 passed; 0 failed; 0 skipped; finished in 3.45ms (1.74ms CPU time)
+Ran 41 tests for test/unit/VqALCX.t.sol:VqALCXTest
+[PASS] test_AcceptAuctioneerOnlyByPending() (gas: 40866)
+[PASS] test_BurnViaAuctionRejectsPayoutAboveBurn() (gas: 17465)
+[PASS] test_CancelAfterPartialFillKeepsClaimableAmount() (gas: 344661)
+[PASS] test_CancelDepositRequest() (gas: 203779)
+[PASS] test_CancelRevertsAfterFullClaim() (gas: 349314)
+[PASS] test_CancelRevertsIfNotOwner() (gas: 187580)
+[PASS] test_CancelWithdrawRequest() (gas: 495939)
+[PASS] test_CancellationPenaltyBounds() (gas: 212873)
+[PASS] test_Construction() (gas: 34532)
+[PASS] test_ConvertToSharesAndAssets() (gas: 8188)
+[PASS] test_DepositAfterFulfillment() (gas: 351535)
+[PASS] test_DepositCannotBeDoubleClaimed() (gas: 355274)
+[PASS] test_DepositClaimWhilePaused() (gas: 370676)
+[PASS] test_DepositRevertsIfNotFulfillable() (gas: 190190)
+[PASS] test_FIFOOrdering() (gas: 415317)
+[PASS] test_LazyDripFulfillment() (gas: 273724)
+[PASS] test_LazyDripPartial() (gas: 265794)
+[PASS] test_MaxDepositQuotedForCaller() (gas: 340268)
+[PASS] test_MintAfterFulfillment() (gas: 343775)
+[PASS] test_MintClaimWhilePaused() (gas: 370633)
+[PASS] test_MintViaAuction() (gas: 106063)
+[PASS] test_MintViaAuctionCapacityExceeded() (gas: 53620)
+[PASS] test_MintViaAuctionOnlyAuctioneer() (gas: 15025)
+[PASS] test_OnlyGovernanceCanSetParams() (gas: 14278)
+[PASS] test_PartialClaimRetainsRemainder() (gas: 358309)
+[PASS] test_PartialDripFillIsClaimable() (gas: 337579)
+[PASS] test_PauseBlocksNewEntriesAndAllowsWithdrawals() (gas: 629979)
+[PASS] test_RedeemAfterFulfillment() (gas: 486707)
+[PASS] test_RequestDeposit() (gas: 193388)
+[PASS] test_RequestDepositCapacityExceeded() (gas: 26189)
+[PASS] test_RequestDepositRejectsZero() (gas: 19306)
+[PASS] test_RequestDepositRequiresAlcxBalance() (gas: 30504)
+
+=== Cross-contract campaign selector table ===
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | fundRewards      | 7530  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | requestDeposit   | 7441  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | requestWithdraw  | 7459  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | settleDeposit    | 7518  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | settleWithdraw   | 7622  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | stake            | 7697  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | unstake          | 7600  | 0       | 0        |
+╰--------------+------------------+-------+---------+----------╯
+
+[PASS] invariant_StakingAccounting() (runs: 256, calls: 128000, reverts: 0)
+
+╭--------------+------------------+-------+---------+----------╮
+| Contract     | Selector         | Calls | Reverts | Discards |
++==============================================================+
+| CrossHandler | advanceTime      | 14896 | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | bidDepositRound  | 7473  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | bidWithdrawRound | 7435  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | cancelDeposit    | 7506  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | cancelWithdraw   | 7529  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | claimDeposit     | 15174 | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | claimRewards     | 7537  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | claimWithdraw    | 7583  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | fundRewards      | 7530  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | requestDeposit   | 7441  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | requestWithdraw  | 7459  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | settleDeposit    | 7518  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | settleWithdraw   | 7622  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | stake            | 7697  | 0       | 0        |
+|--------------+------------------+-------+---------+----------|
+| CrossHandler | unstake          | 7600  | 0       | 0        |
+╰--------------+------------------+-------+---------+----------╯
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 41.24s (82.81s CPU time)
+
+Ran 1 test suite in 41.24s (41.24s CPU time): 3 tests passed, 0 failed, 0 skipped (3 total tests)

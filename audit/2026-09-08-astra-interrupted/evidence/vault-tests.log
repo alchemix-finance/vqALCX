@@ -1,0 +1,19 @@
+Compiling 1 files with Solc 0.8.36
+Solc 0.8.36 finished in 321.11ms
+Compiler run successful!
+2026-09-08T10:22:46.770541Z  WARN evm::traces::external: etherscan config not found
+
+Ran 7 tests for test/audit/VaultAudit.t.sol:VaultAuditTest
+[PASS] test_AuctionBurnWithdrawEventSwapsAssetsAndShares() (gas: 380523)
+[PASS] test_CancelledQueueBacklogCannotProgressWithin30MillionGas() (gas: 725098668)
+Logs:
+  cold gas for 5001 cancelled entries: 37126216
+
+[PASS] test_ElapsedCancellationAndStaleViews() (gas: 209511)
+[PASS] test_MaxDepositAndMintExceedSingleRequestClaim() (gas: 493149)
+[PASS] test_MaxWithdrawAndRedeemExceedSingleRequestClaim() (gas: 647973)
+[PASS] test_OverflowingRateBlocksCorrectionAndUnrelatedClaim() (gas: 512414)
+[PASS] test_PartialCancellationRetainsClaimsAndAllowanceIsAtomic() (gas: 595928)
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 179.15ms (181.95ms CPU time)
+
+Ran 1 test suite in 185.39ms (179.15ms CPU time): 7 tests passed, 0 failed, 0 skipped (7 total tests)

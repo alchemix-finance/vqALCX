@@ -1,0 +1,5 @@
+NOTE: 6 VqStaking checkpoint tests (test_CheckpointOnStake, test_CheckpointOnUnstake, test_DelegateCheckpointConsistency, test_GetPastBalanceOf, test_GetPastDelegate, test_GetPastVotes) revert with ERC5805FutureLookup ONLY under forge coverage instrumentation (timepoint==clock); they pass in normal runs (109/109 with seed 0x5bfb483). Treated as a coverage-mode tool artifact, not a contract defect: the queried timepoint equals the clock under instrumentation, which OZ correctly rejects.
+
+| src/VqALCX.sol                            | 91.49% (258/282) | 89.25% (274/307) | 64.71% (33/51)  | 83.02% (44/53)  |
+| src/VqAuctioner.sol                       | 90.85% (129/142) | 87.79% (151/172) | 58.62% (17/29)  | 100.00% (11/11) |
+| src/VqStaking.sol                         | 96.49% (55/57)   | 92.45% (49/53)   | 50.00% (3/6)    | 92.31% (12/13)  |

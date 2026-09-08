@@ -1,0 +1,342 @@
+{
+  "reviewed_commit": "5bfb483025e65ab0a88912eda5295849e6bf944c",
+  "versions": {
+    "solidity": "0.8.36",
+    "openzeppelin": "5.7.0",
+    "forge_std": "1.16.1"
+  },
+  "gitlinks": [
+    "160000 commit 620536fa5277db4e3fd46772d5cbc1ea0696fb43\tlib/forge-std",
+    "160000 commit cab19933c33c2ad1d4c7a84864a3601dddfd16f3\tlib/openzeppelin-contracts"
+  ],
+  "record_counts": {
+    "solidity": 63,
+    "openzeppelin": 20
+  },
+  "compiler_affected_records": [],
+  "openzeppelin_triage": [
+    {
+      "id": "GHSA-9rcw-c2f9-2j55",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-9rcw-c2f9-2j55",
+      "range": ">=5.2.0",
+      "patched": "5.4.0",
+      "assessment": "locally patched and no lastIndexOf caller in first-party import closure"
+    },
+    {
+      "id": "GHSA-9vx6-7xxf-x967",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-9vx6-7xxf-x967",
+      "range": ">=4.5.0 <5.0.2",
+      "patched": "5.0.2,4.9.6",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-699g-q6qh-q4v8",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-699g-q6qh-q4v8",
+      "range": "4.9.4",
+      "patched": "4.9.5",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-g4vp-m682-qqmp",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-g4vp-m682-qqmp",
+      "range": ">=4.0.0 <4.9.3",
+      "patched": "4.9.3",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-wprv-93r4-jj2p",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-wprv-93r4-jj2p",
+      "range": ">=4.7.0 <4.9.2",
+      "patched": "4.9.2",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-5h3x-9wvq-w4m2",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-5h3x-9wvq-w4m2",
+      "range": ">=4.3.0 <4.9.1",
+      "patched": "4.9.1",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-mx2q-35m2-x2rh",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-mx2q-35m2-x2rh",
+      "range": ">=3.2.0 <4.8.3",
+      "patched": "4.8.3",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-93hq-5wgc-jc82",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-93hq-5wgc-jc82",
+      "range": ">=4.3.0 <4.8.3",
+      "patched": "4.8.3",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-878m-3g6q-594q",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-878m-3g6q-594q",
+      "range": ">=4.8.0 <4.8.2",
+      "patched": "4.8.2",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-4h98-2769-gh6h",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-4h98-2769-gh6h",
+      "range": ">= 4.1.0 < 4.7.3",
+      "patched": "4.7.3",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-9j3m-g383-29qr",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-9j3m-g383-29qr",
+      "range": ">= 4.6.0 < 4.7.2",
+      "patched": "4.7.2",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-xrc4-737v-9q75",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-xrc4-737v-9q75",
+      "range": ">= 4.3.0 < 4.7.2",
+      "patched": "4.7.2",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-7grf-83vw-6f5x",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-7grf-83vw-6f5x",
+      "range": ">=2.0.0 < 4.7.2",
+      "patched": "4.7.2",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-4g63-c64m-25w9",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-4g63-c64m-25w9",
+      "range": ">= 4.1.0 <4.7.1",
+      "patched": "4.7.1",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-qh9x-gcfh-pcrw",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-qh9x-gcfh-pcrw",
+      "range": ">=4.0.0 <4.7.1",
+      "patched": "4.7.1",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-m6w8-fq7v-ph4m",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-m6w8-fq7v-ph4m",
+      "range": ">=4.3.0 <4.4.2",
+      "patched": "4.4.2",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-9c22-pwxw-p6hx",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-9c22-pwxw-p6hx",
+      "range": ">=3.2.0 <4.4.1",
+      "patched": "4.4.1",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-wmpv-c2jp-j2xg",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-wmpv-c2jp-j2xg",
+      "range": ">= 4.2.0 < 4.3.3",
+      "patched": "4.3.3",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-5vp3-v4hc-gx76",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-5vp3-v4hc-gx76",
+      "range": ">= 4.1.0 < 4.3.2",
+      "patched": "4.3.2",
+      "assessment": "5.7.0 outside stated affected range"
+    },
+    {
+      "id": "GHSA-fg47-3c2x-m2wr",
+      "url": "https://github.com/OpenZeppelin/openzeppelin-contracts/security/advisories/GHSA-fg47-3c2x-m2wr",
+      "range": ">=4.0.0 <=4.3.0, >=3.3.0 <=3.4.1, 3.3.0-solc-0.7, 3.4.0-solc-0.7, 3.4.1-solc-0.7-2",
+      "patched": "4.3.1, 3.4.2, 3.4.2-solc-0.7",
+      "assessment": "5.7.0 outside stated affected range"
+    }
+  ],
+  "first_party_source_comparison": {
+    "left_root": "/tmp/vqalcx-review-8EdnZ3n0",
+    "right_root": "/Users/deepthought/Desktop/dev/vqalcx",
+    "file_count": 3,
+    "mismatches": [],
+    "files": [
+      {
+        "path": "src/VqALCX.sol",
+        "sha256": "9faabaa3933a9773d021f5850c7eaec61b12b12700cc9732a679a0520d02c3a5"
+      },
+      {
+        "path": "src/VqAuctioner.sol",
+        "sha256": "03f2d24ec21472f5af7b41f33ef047200a559a5dae633916160cebe19c01ff0e"
+      },
+      {
+        "path": "src/VqStaking.sol",
+        "sha256": "5be30ee44b311295e9fa42d93d4d9aca0c2aa39594e36a2ec679c554a7a19403"
+      }
+    ]
+  },
+  "dependency_source_comparison": {
+    "left_root": "/tmp/vqalcx-review-8EdnZ3n0",
+    "right_root": "/tmp/vqalcx-audit-20260908",
+    "file_count": 34,
+    "mismatches": [],
+    "files": [
+      {
+        "path": "lib/openzeppelin-contracts/contracts/governance/utils/IVotes.sol",
+        "sha256": "059fcf54ee8e21e9dac976491d7d7441049ce12e351a8c66b894846243b60a0b"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/governance/utils/Votes.sol",
+        "sha256": "aba45a51c702b1edc1ee0d239a98b87ea01ff3c274f34841e21b881fe11345e0"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/governance/utils/VotesExtended.sol",
+        "sha256": "4544701a31274525919859afba5b9be505b59d9db2bb4c8b61030c54fa52c1f2"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/IERC1363.sol",
+        "sha256": "9c3a75a925a6dac9e88b03cddc58d42fe3131b0aaaad84408521f3f7af2f991b"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/IERC165.sol",
+        "sha256": "dfb3f56fa928a7c6cae41a7ce2c86b9210fa18d33fa26389099d66a0fa790368"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol",
+        "sha256": "0158e2d3e0e28bedd99eec13dcf1a8aa3a70a5b7e4bb2ad709609c95fcc740d1"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/IERC20Metadata.sol",
+        "sha256": "0ef8d844d8e066abd5c0d8cc1c550c89f2628a4ea9c9bb16c7593d4207800ca8"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/IERC4626.sol",
+        "sha256": "a43d346b74ce2cfa871ce3386aaaf6aec719e205e7c8148efc1c95612fc7b8eb"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/IERC5267.sol",
+        "sha256": "f89772d2d4fafcbef8b73bb10ee9a3373edec2eedb2f1b302320915b351dc3d1"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/IERC5805.sol",
+        "sha256": "2b1e317a9ad0303948d00cfee78c42f99f7558c8d2002a7c63f04d2b70324cac"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/IERC6372.sol",
+        "sha256": "cc16276c221713bc438556c8236a8a785aef60adc25318d9fc06712ad8fadd38"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/interfaces/draft-IERC6093.sol",
+        "sha256": "fa7068f56bc180571a6095be6eaef06d51dbe81e30cb128397d993c9599ecc30"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/token/ERC20/ERC20.sol",
+        "sha256": "50f34ae16a067a41c2c1091445d11d63788e54c717677cb6d6b0e4cdea2ad21d"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol",
+        "sha256": "01b6f5c4fa45fd38822b286ecef6daf983d27306dd6362496fa71b3e4600b72c"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol",
+        "sha256": "0b7132f17d14d1d84b41b0bb429be62dafdff00fd3470f68724d8018eb07f57a"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol",
+        "sha256": "93685e4e976be584a5e6abfc37376fe17c99bee53e07610efcc1ce51868e90d1"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/Bytes.sol",
+        "sha256": "78b01e1da6f6e6aaa8ef97b5d5ed885f638520bfdafb65e813b900a14c9d4eac"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/Context.sol",
+        "sha256": "847fda5460fee70f56f4200f59b82ae622bb03c79c77e67af010e31b7e2cc5b6"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/ERC6372Utils.sol",
+        "sha256": "c413d812a3e36abc03443b5d4eab8f2cabc954132a177cf08fb7abbbae60cb08"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/Nonces.sol",
+        "sha256": "6a98ef6eaaac8dfc73307cb0ebbed97bfa20cf825c7fe96b734e3eda7e935e09"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/Panic.sol",
+        "sha256": "270fc8401c1a13fae6a7a4a2dd6e381b95d658896701e51f0d3e2688acab3dec"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol",
+        "sha256": "94e409e8f6e3184236651a6cc2b1a6a3ea0f0a25eb85b71e524ad5791bb2fbc8"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/ShortStrings.sol",
+        "sha256": "0b66f6166641f1951f7a412d55df071224f1ba3a629bab73d185505026851c06"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/StorageSlot.sol",
+        "sha256": "75704538dcb223239280c6726d9a31cf769a7816718517c997fc7d63bdb70778"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/Strings.sol",
+        "sha256": "e318709bbe73a7831d64c1351e8bdc43780b245f25191234e361e6ab9b98c67b"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol",
+        "sha256": "e3758f08ce5e53ada22c743450d3b61d965c92d4c76fcc8633a7eebd0455eb7c"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol",
+        "sha256": "1023ca2a7f9590767a9cf7b7ed1259801d81c576787b7e25d5a40683c8c3fd97"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol",
+        "sha256": "538a0d7c4f0ec5a8562f58561890f7b49d14580674ecf58bc5f505b45c73df65"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/introspection/IERC165.sol",
+        "sha256": "9055c2994b37dea1a41b7b7926dcb510f05dbe2540b0aafc5fbee9558fffd0ca"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/math/Math.sol",
+        "sha256": "bdfdbe133991c0c78042957ff5cd97167926fcaf6d15664f3835a076cb066457"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol",
+        "sha256": "5779bc848bde39f1ad7bc02b4f708a0040888e0083b1a33f119cd94639350134"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/math/SignedMath.sol",
+        "sha256": "1ed50b1056af886752f0fb48a0165d381e69bb4a4b18b893b066dc144a7e08d7"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol",
+        "sha256": "7753753c3c8cbfd75c9ceab1917fbfbc862d205f894eeb29c438a2c5cc5223af"
+      },
+      {
+        "path": "lib/openzeppelin-contracts/contracts/utils/types/Time.sol",
+        "sha256": "8085f943150cce1a10aa843f83519960c3010efe5792a9ee58f87c1993d33472"
+      }
+    ]
+  },
+  "dependency_installations": [
+    {
+      "snapshot_link": "/tmp/vqalcx-review-8EdnZ3n0/lib/openzeppelin-contracts",
+      "snapshot_link_target": "/tmp/vqalcx-audit-20260908/lib/openzeppelin-contracts",
+      "verified_tree": "/tmp/vqalcx-audit-20260908/lib/openzeppelin-contracts",
+      "head": "cab19933c33c2ad1d4c7a84864a3601dddfd16f3",
+      "working_tree_status": "",
+      "package_version": "5.7.0"
+    },
+    {
+      "snapshot_link": "/tmp/vqalcx-review-8EdnZ3n0/lib/forge-std",
+      "snapshot_link_target": "/tmp/vqalcx-audit-20260908/lib/forge-std",
+      "verified_tree": "/tmp/vqalcx-audit-20260908/lib/forge-std",
+      "head": "620536fa5277db4e3fd46772d5cbc1ea0696fb43",
+      "working_tree_status": "",
+      "package_version": "1.16.1"
+    }
+  ],
+  "workspace_dependency_installation": "Not relied upon for this reconciliation. Dependency revisions and contents were verified in the installed /tmp/vqalcx-audit-20260908 trees used by snapshot symlinks. No root dependency modification was performed."
+}

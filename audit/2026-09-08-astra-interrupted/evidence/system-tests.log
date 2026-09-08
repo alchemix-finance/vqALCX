@@ -1,0 +1,100 @@
+Compiling 1 files with Solc 0.8.36
+Solc 0.8.36 finished in 393.32ms
+Compiler run successful with warnings:
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:129:5:
+    |
+129 |     function at(Trace256 storage self, uint32 index) internal view returns (Checkpoint256 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:344:5:
+    |
+344 |     function at(Trace224 storage self, uint32 index) internal view returns (Checkpoint224 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:559:5:
+    |
+559 |     function at(Trace208 storage self, uint32 index) internal view returns (Checkpoint208 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Warning (6335): "at" will be promoted to keyword in the future and will not be allowed as an identifier anymore.
+   --> lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol:774:5:
+    |
+774 |     function at(Trace160 storage self, uint32 index) internal view returns (Checkpoint160 memory) {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+2026-09-08T09:13:16.835304Z  WARN evm::traces::external: etherscan config not found
+
+Ran 2 tests for test/audit/SystemAudit.t.sol:SystemAuditTest
+[PASS] testFuzz_SystemConservationAndLastUserExit(uint256) (runs: 256, μ: 28496121, ~: 28236121)
+[PASS] test_SystemTransitionEvidence() (gas: 187942112)
+Logs:
+  operation: 0
+  successful: 21
+  inapplicable: 0
+  operation: 1
+  successful: 17
+  inapplicable: 0
+  operation: 2
+  successful: 11
+  inapplicable: 7
+  operation: 3
+  successful: 10
+  inapplicable: 16
+  operation: 4
+  successful: 13
+  inapplicable: 13
+  operation: 5
+  successful: 9
+  inapplicable: 12
+  operation: 6
+  successful: 1
+  inapplicable: 17
+  operation: 7
+  successful: 1
+  inapplicable: 11
+  operation: 8
+  successful: 4
+  inapplicable: 18
+  operation: 9
+  successful: 7
+  inapplicable: 8
+  operation: 10
+  successful: 6
+  inapplicable: 13
+  operation: 11
+  successful: 10
+  inapplicable: 10
+  operation: 12
+  successful: 29
+  inapplicable: 0
+  operation: 13
+  successful: 18
+  inapplicable: 2
+  operation: 14
+  successful: 27
+  inapplicable: 0
+  operation: 15
+  successful: 12
+  inapplicable: 4
+  operation: 16
+  successful: 28
+  inapplicable: 0
+  operation: 17
+  successful: 33
+  inapplicable: 0
+  operation: 18
+  successful: 19
+  inapplicable: 0
+  operation: 19
+  successful: 27
+  inapplicable: 0
+  operation: 20
+  successful: 14
+  inapplicable: 0
+
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 7.64s (7.78s CPU time)
+
+Ran 1 test suite in 7.65s (7.64s CPU time): 2 tests passed, 0 failed, 0 skipped (2 total tests)

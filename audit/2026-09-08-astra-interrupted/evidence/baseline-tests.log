@@ -1,0 +1,239 @@
+No files changed, compilation skipped
+2026-09-08T09:07:39.219413Z  WARN evm::traces::external: etherscan config not found
+
+Ran 41 tests for test/unit/VqALCX.t.sol:VqALCXTest
+[PASS] test_AcceptAuctioneerOnlyByPending() (gas: 40866)
+[PASS] test_BurnViaAuctionRejectsPayoutAboveBurn() (gas: 17465)
+[PASS] test_CancelAfterPartialFillKeepsClaimableAmount() (gas: 344661)
+[PASS] test_CancelDepositRequest() (gas: 203779)
+[PASS] test_CancelRevertsAfterFullClaim() (gas: 349314)
+[PASS] test_CancelRevertsIfNotOwner() (gas: 187580)
+[PASS] test_CancelWithdrawRequest() (gas: 495939)
+[PASS] test_CancellationPenaltyBounds() (gas: 212873)
+[PASS] test_Construction() (gas: 34532)
+[PASS] test_ConvertToSharesAndAssets() (gas: 8188)
+[PASS] test_DepositAfterFulfillment() (gas: 351535)
+[PASS] test_DepositCannotBeDoubleClaimed() (gas: 355274)
+[PASS] test_DepositClaimWhilePaused() (gas: 370676)
+[PASS] test_DepositRevertsIfNotFulfillable() (gas: 190190)
+[PASS] test_FIFOOrdering() (gas: 415317)
+[PASS] test_LazyDripFulfillment() (gas: 273724)
+[PASS] test_LazyDripPartial() (gas: 265794)
+[PASS] test_MaxDepositQuotedForCaller() (gas: 340268)
+[PASS] test_MintAfterFulfillment() (gas: 343775)
+[PASS] test_MintClaimWhilePaused() (gas: 370633)
+[PASS] test_MintViaAuction() (gas: 106063)
+[PASS] test_MintViaAuctionCapacityExceeded() (gas: 53620)
+[PASS] test_MintViaAuctionOnlyAuctioneer() (gas: 15025)
+[PASS] test_OnlyGovernanceCanSetParams() (gas: 14278)
+[PASS] test_PartialClaimRetainsRemainder() (gas: 358309)
+[PASS] test_PartialDripFillIsClaimable() (gas: 337579)
+[PASS] test_PauseBlocksNewEntriesAndAllowsWithdrawals() (gas: 629979)
+[PASS] test_RedeemAfterFulfillment() (gas: 486707)
+[PASS] test_RequestDeposit() (gas: 193388)
+[PASS] test_RequestDepositCapacityExceeded() (gas: 26189)
+[PASS] test_RequestDepositRejectsZero() (gas: 19306)
+[PASS] test_RequestDepositRequiresAlcxBalance() (gas: 30504)
+[PASS] test_RequestWithdrawAndFulfill() (gas: 491576)
+[PASS] test_RequestWithdrawRequiresShareBalance() (gas: 28785)
+[PASS] test_RevertZeroAsset() (gas: 137261)
+[PASS] test_SetBucketParamsRejectsCapacityBelowPending() (gas: 186990)
+[PASS] test_SetBucketParamsRejectsZeroRate() (gas: 14216)
+[PASS] test_TotalAssets() (gas: 344356)
+[PASS] test_TwoStepAuctioneerTransfer() (gas: 36841)
+[PASS] test_TwoStepGovernanceTransfer() (gas: 32368)
+[PASS] test_WithdrawCannotBeDoubleClaimed() (gas: 492326)
+Suite result: ok. 41 passed; 0 failed; 0 skipped; finished in 8.42ms (5.31ms CPU time)
+
+Ran 21 tests for test/unit/VqStaking.t.sol:VqStakingTest
+[PASS] test_AccrueRewardsCallableByAnyone() (gas: 613389)
+[PASS] test_CheckpointOnStake() (gas: 732871)
+[PASS] test_CheckpointOnUnstake() (gas: 608746)
+[PASS] test_Construction() (gas: 18546)
+[PASS] test_ConstructorRejectsStakedTokenAsRewardToken() (gas: 67576)
+[PASS] test_DelegateCheckpointConsistency() (gas: 1033733)
+[PASS] test_DelegateSelf() (gas: 638298)
+[PASS] test_DelegateToOther() (gas: 644302)
+[PASS] test_GetPastBalanceOf() (gas: 522810)
+[PASS] test_GetPastDelegate() (gas: 642369)
+[PASS] test_GetPastVotes() (gas: 640039)
+[PASS] test_GetVotesBeforeDelegate() (gas: 522183)
+[PASS] test_PushRewardsDetectedOnNextInteraction() (gas: 933145)
+[PASS] test_RewardsAccrueBeforeStake() (gas: 617423)
+[PASS] test_RewardsDuringZeroStakeWindowCarryToNextStaker() (gas: 917549)
+[PASS] test_RewardsProportionalToStake() (gas: 933190)
+[PASS] test_Stake() (gas: 523143)
+[PASS] test_StakingAccountingInvariant() (gas: 850716)
+[PASS] test_Unstake() (gas: 560198)
+[PASS] test_UnstakeInsufficientBalance() (gas: 543655)
+[PASS] test_VqALCXBalanceDoesNotChangeOnStake() (gas: 542230)
+Suite result: ok. 21 passed; 0 failed; 0 skipped; finished in 23.68s (6.40ms CPU time)
+
+Ran 21 tests for test/unit/VqAuctioner.t.sol:VqAuctionerTest
+[PASS] test_AuctionCapacityBoundedByRate() (gas: 168510)
+[PASS] test_AuctioneerAlcxBalanceZeroAfterDepositSettlement() (gas: 635807)
+[PASS] test_AuctioneerVqALCXBalanceZeroAfterWithdrawSettlement() (gas: 1027029)
+[PASS] test_BidAfterRoundExpiry() (gas: 174685)
+[PASS] test_Construction() (gas: 20477)
+[PASS] test_DepositAuctionSettlement() (gas: 645656)
+[PASS] test_DepositBid() (gas: 366375)
+[PASS] test_DepositBidOutbids() (gas: 446154)
+[PASS] test_DepositBidRequiresPriceAboveBase() (gas: 17630)
+[PASS] test_DepositBidTooLow() (gas: 370357)
+[PASS] test_DepositRoundStartsNextAfterSettlement() (gas: 312796)
+[PASS] test_DepositSettlementPartiallyFillsWhenCapacityIsShort() (gas: 8556140)
+[PASS] test_DepositSettlementRefundsWinnerWhenCapacityIsZero() (gas: 8450280)
+[PASS] test_NoBidsSettlement() (gas: 312839)
+[PASS] test_SettleDepositRoundRejectsNonCurrentRoundId() (gas: 377579)
+[PASS] test_SettleWithdrawRoundRejectsNonCurrentRoundId() (gas: 163646)
+[PASS] test_WithdrawAuctionSettlement() (gas: 1036797)
+[PASS] test_WithdrawBid() (gas: 961339)
+[PASS] test_WithdrawBidRequiresPayoutAtOrBelowBase() (gas: 17496)
+[PASS] test_WithdrawSettlementPartiallyFillsWhenCapacityIsShort() (gas: 8825479)
+[PASS] test_WithdrawSettlementRefundsWinnerWhenCapacityIsZero() (gas: 8768572)
+Suite result: ok. 21 passed; 0 failed; 0 skipped; finished in 23.68s (10.64ms CPU time)
+
+Ran 7 tests for test/invariant/VqALCX.invariant.t.sol:VqALCXInvariantTest
+[PASS] invariant_DepositQueueCapacity() (runs: 256, calls: 128000, reverts: 27745)
+
+╭---------------+-----------------------+-------+---------+----------╮
+| Contract      | Selector              | Calls | Reverts | Discards |
++====================================================================+
+| VqALCXHandler | advanceTime           | 15932 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelDepositRequest  | 16149 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelWithdrawRequest | 16108 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | deposit               | 15908 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestDeposit        | 15881 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestWithdraw       | 32100 | 18549   | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | withdraw              | 15922 | 9196    | 0        |
+╰---------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_HeadLeTail() (runs: 256, calls: 128000, reverts: 27568)
+
+╭---------------+-----------------------+-------+---------+----------╮
+| Contract      | Selector              | Calls | Reverts | Discards |
++====================================================================+
+| VqALCXHandler | advanceTime           | 15932 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelDepositRequest  | 16149 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelWithdrawRequest | 16108 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | deposit               | 15908 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestDeposit        | 15881 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestWithdraw       | 32100 | 18499   | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | withdraw              | 15922 | 9069    | 0        |
+╰---------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_NoLockup() (runs: 256, calls: 128000, reverts: 27563)
+
+╭---------------+-----------------------+-------+---------+----------╮
+| Contract      | Selector              | Calls | Reverts | Discards |
++====================================================================+
+| VqALCXHandler | advanceTime           | 15932 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelDepositRequest  | 16149 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelWithdrawRequest | 16108 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | deposit               | 15908 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestDeposit        | 15881 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestWithdraw       | 32100 | 18481   | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | withdraw              | 15922 | 9082    | 0        |
+╰---------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_ProfitNonNegative() (runs: 256, calls: 128000, reverts: 27646)
+
+╭---------------+-----------------------+-------+---------+----------╮
+| Contract      | Selector              | Calls | Reverts | Discards |
++====================================================================+
+| VqALCXHandler | advanceTime           | 15932 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelDepositRequest  | 16149 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelWithdrawRequest | 16108 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | deposit               | 15908 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestDeposit        | 15881 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestWithdraw       | 32100 | 18482   | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | withdraw              | 15922 | 9164    | 0        |
+╰---------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_SharePrice1to1() (runs: 256, calls: 128000, reverts: 27581)
+
+╭---------------+-----------------------+-------+---------+----------╮
+| Contract      | Selector              | Calls | Reverts | Discards |
++====================================================================+
+| VqALCXHandler | advanceTime           | 15932 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelDepositRequest  | 16149 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelWithdrawRequest | 16108 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | deposit               | 15908 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestDeposit        | 15881 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestWithdraw       | 32100 | 18501   | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | withdraw              | 15922 | 9080    | 0        |
+╰---------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_WatermarkBacking() (runs: 256, calls: 128000, reverts: 27675)
+
+╭---------------+-----------------------+-------+---------+----------╮
+| Contract      | Selector              | Calls | Reverts | Discards |
++====================================================================+
+| VqALCXHandler | advanceTime           | 15932 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelDepositRequest  | 16149 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelWithdrawRequest | 16108 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | deposit               | 15908 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestDeposit        | 15881 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestWithdraw       | 32100 | 18498   | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | withdraw              | 15922 | 9177    | 0        |
+╰---------------+-----------------------+-------+---------+----------╯
+
+[PASS] invariant_WithdrawQueueCapacity() (runs: 256, calls: 128000, reverts: 27817)
+
+╭---------------+-----------------------+-------+---------+----------╮
+| Contract      | Selector              | Calls | Reverts | Discards |
++====================================================================+
+| VqALCXHandler | advanceTime           | 15932 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelDepositRequest  | 16149 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | cancelWithdrawRequest | 16108 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | deposit               | 15908 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestDeposit        | 15881 | 0       | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | requestWithdraw       | 32100 | 18579   | 0        |
+|---------------+-----------------------+-------+---------+----------|
+| VqALCXHandler | withdraw              | 15922 | 9238    | 0        |
+╰---------------+-----------------------+-------+---------+----------╯
+
+Suite result: ok. 7 passed; 0 failed; 0 skipped; finished in 23.68s (99.19s CPU time)
+
+Ran 4 test suites in 23.69s (71.05s CPU time): 90 tests passed, 0 failed, 0 skipped (90 total tests)
