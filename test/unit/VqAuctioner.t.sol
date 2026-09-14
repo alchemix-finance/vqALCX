@@ -2,17 +2,9 @@
 pragma solidity 0.8.36;
 
 import {Test} from "@forge-std/Test.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {VqALCX} from "../../src/VqALCX.sol";
 import {VqAuctioner} from "../../src/VqAuctioner.sol";
-
-contract MockALCX is ERC20 {
-    constructor() ERC20("Alchemix", "ALCX") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
+import {MockALCX} from "../mocks/Mocks.sol";
 
 contract VqAuctionerTest is Test {
     VqALCX public vault;
@@ -39,13 +31,11 @@ contract VqAuctionerTest is Test {
         vault.proposeAuctioneer(address(auctioner));
         auctioner.acceptVaultAuctioneer();
 
-        // Set bucket params
         vm.prank(governance);
         vault.setDepositBucketParams(RATE, CAPACITY);
         vm.prank(governance);
         vault.setWithdrawBucketParams(RATE, CAPACITY);
 
-        // Mint tokens
         alcx.mint(alice, 1_000_000e18);
         alcx.mint(bob, 1_000_000e18);
 
@@ -104,7 +94,6 @@ contract VqAuctionerTest is Test {
     // ------------------------------------------------------------------
 
     function test_DepositBid() public {
-        // Warp to accumulate vault auction capacity
         vm.warp(block.timestamp + 100); // 100 * 100 = 10,000 capacity
 
         uint256 roundId = auctioner.ensureDepositRound();
@@ -130,17 +119,14 @@ contract VqAuctionerTest is Test {
 
         auctioner.ensureDepositRound();
 
-        // Alice bids 1050
         vm.prank(alice);
         auctioner.bidDeposit(1000e18, 1050e18);
 
         uint256 aliceBalBefore = alcx.balanceOf(alice);
 
-        // Bob outbids with 1100
         vm.prank(bob);
         auctioner.bidDeposit(1000e18, 1100e18);
 
-        // Alice should be refunded
         assertEq(alcx.balanceOf(alice), aliceBalBefore + 1050e18);
 
         VqAuctioner.Round memory round = auctioner.getDepositRound(1);
@@ -167,19 +153,13 @@ contract VqAuctionerTest is Test {
         vm.prank(alice);
         auctioner.bidDeposit(1000e18, 1050e18);
 
-        // Warp past round end
         vm.warp(block.timestamp + ROUND_DURATION + 1);
 
         uint256 treasuryBefore = alcx.balanceOf(treasury);
         auctioner.settleDepositRound(1);
 
-        // Alice gets 1000 vqALCX
         assertEq(vault.balanceOf(alice), 1000e18);
-
-        // Treasury gets 50 ALCX premium
         assertEq(alcx.balanceOf(treasury), treasuryBefore + 50e18);
-
-        // Vault gets 1000 ALCX backing
         assertEq(alcx.balanceOf(address(vault)), 1000e18);
     }
 
@@ -190,7 +170,6 @@ contract VqAuctionerTest is Test {
         vm.warp(block.timestamp + ROUND_DURATION + 1);
         auctioner.settleDepositRound(1);
 
-        // Next round should be active
         assertEq(auctioner.currentDepositRound(), 2);
     }
 
@@ -199,7 +178,6 @@ contract VqAuctionerTest is Test {
     // ------------------------------------------------------------------
 
     function test_WithdrawBid() public {
-        // First get some vqALCX for bob via deposit auction
         vm.warp(block.timestamp + 100);
         auctioner.ensureDepositRound();
 
@@ -212,7 +190,6 @@ contract VqAuctionerTest is Test {
         // Alice now has 1000 vqALCX
         assertEq(vault.balanceOf(alice), 1000e18);
 
-        // Alice approves auctioneer for vqALCX
         vm.startPrank(alice);
         vault.approve(address(auctioner), type(uint256).max);
 
@@ -234,7 +211,6 @@ contract VqAuctionerTest is Test {
     }
 
     function test_WithdrawAuctionSettlement() public {
-        // Setup: get alice vqALCX via deposit
         vm.warp(block.timestamp + 100);
         auctioner.ensureDepositRound();
         vm.prank(alice);
@@ -244,7 +220,6 @@ contract VqAuctionerTest is Test {
 
         assertEq(vault.balanceOf(alice), 1000e18);
 
-        // Withdraw auction
         vm.warp(block.timestamp + 100);
         vm.startPrank(alice);
         vault.approve(address(auctioner), type(uint256).max);
@@ -257,12 +232,8 @@ contract VqAuctionerTest is Test {
         uint256 aliceAlcxBefore = alcx.balanceOf(alice);
         auctioner.settleWithdrawRound(1);
 
-        // Alice gets 970 ALCX
         assertEq(alcx.balanceOf(alice), aliceAlcxBefore + 970e18);
-
-        // Alice's vqALCX burned
         assertEq(vault.balanceOf(alice), 0);
-
         // 30 ALCX stays in vault (discount = protocol profit)
         assertGe(alcx.balanceOf(address(vault)), 30e18);
     }
@@ -399,7 +370,6 @@ contract VqAuctionerTest is Test {
         vm.warp(block.timestamp + ROUND_DURATION + 1);
         auctioner.settleDepositRound(1); // no bids
 
-        // Next round starts
         assertEq(auctioner.currentDepositRound(), 2);
     }
 
@@ -434,7 +404,6 @@ contract VqAuctionerTest is Test {
     }
 
     function test_AuctioneerVqALCXBalanceZeroAfterWithdrawSettlement() public {
-        // Setup: alice gets vqALCX
         vm.warp(block.timestamp + 100);
         auctioner.ensureDepositRound();
         vm.prank(alice);
@@ -442,7 +411,6 @@ contract VqAuctionerTest is Test {
         vm.warp(block.timestamp + ROUND_DURATION + 1);
         auctioner.settleDepositRound(1);
 
-        // Withdraw auction
         vm.warp(block.timestamp + 100);
         vm.startPrank(alice);
         vault.approve(address(auctioner), type(uint256).max);

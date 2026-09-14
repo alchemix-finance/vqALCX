@@ -2,31 +2,15 @@
 pragma solidity 0.8.36;
 
 import {Test} from "@forge-std/Test.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {VqALCX} from "../../src/VqALCX.sol";
 import {VqStaking} from "../../src/VqStaking.sol";
-
-contract MockALCX is ERC20 {
-    constructor() ERC20("Alchemix", "ALCX") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
-
-contract MockRewardToken is ERC20 {
-    constructor() ERC20("Reward", "RWD") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
+import {MockALCX, MockReward} from "../mocks/Mocks.sol";
 
 contract VqStakingTest is Test {
     VqALCX public vault;
     VqStaking public staking;
     MockALCX public alcx;
-    MockRewardToken public rewardToken;
+    MockReward public rewardToken;
 
     address public governance = address(0xCAFE);
     address public alice = address(0x1111);
@@ -38,7 +22,7 @@ contract VqStakingTest is Test {
 
     function setUp() public {
         alcx = new MockALCX();
-        rewardToken = new MockRewardToken();
+        rewardToken = new MockReward();
         vault = new VqALCX(address(alcx), governance, address(0));
         staking = new VqStaking(address(vault), address(rewardToken));
 
@@ -69,6 +53,14 @@ contract VqStakingTest is Test {
         vm.warp(block.timestamp + (amount / RATE) + 1);
         vault.deposit(amount, user);
         vm.stopPrank();
+    }
+
+    /// Stake, wait out the reward warm-up, then poke (zero-reward claim) so the
+    /// batch joins the earning pool.
+    function _season(address user) internal {
+        vm.warp(block.timestamp + staking.REWARD_WARMUP() + 1);
+        vm.prank(user);
+        staking.claimRewards();
     }
 
     // ------------------------------------------------------------------
@@ -256,15 +248,16 @@ contract VqStakingTest is Test {
         vm.prank(bob);
         staking.stake(1000e18);
 
-        // Push reward tokens via plain transfer — no function call needed
+        _season(alice);
+        _season(bob);
+
+        // Push rewards: a plain transfer, no function call needed
         rewardToken.transfer(address(staking), 100e18);
 
-        // Alice should earn ~50
         vm.prank(alice);
         staking.claimRewards();
         assertApproxEqAbs(rewardToken.balanceOf(alice), 50e18, 1);
 
-        // Bob should earn ~50
         vm.prank(bob);
         staking.claimRewards();
         assertApproxEqAbs(rewardToken.balanceOf(bob), 50e18, 1);
@@ -275,6 +268,7 @@ contract VqStakingTest is Test {
 
         vm.prank(alice);
         staking.stake(1000e18);
+        _season(alice);
 
         // Push rewards
         rewardToken.transfer(address(staking), 100e18);
@@ -284,10 +278,8 @@ contract VqStakingTest is Test {
         vm.prank(randomCaller);
         staking.accrueRewards();
 
-        // rewardPerShare should be updated
         assertGt(staking.rewardPerShare(), 0);
 
-        // Alice can claim the full amount
         vm.prank(alice);
         staking.claimRewards();
         assertApproxEqAbs(rewardToken.balanceOf(alice), 100e18, 1);
@@ -305,6 +297,8 @@ contract VqStakingTest is Test {
         // Nothing accrued yet at stake time
         assertEq(staking.earned(alice), 0);
 
+        _season(alice);
+
         // Alice receives both the carried rewards and the new rewards
         rewardToken.transfer(address(staking), 50e18);
 
@@ -318,6 +312,7 @@ contract VqStakingTest is Test {
 
         vm.prank(alice);
         staking.stake(1000e18);
+        _season(alice);
 
         vm.prank(alice);
         staking.unstake(1000e18);
@@ -328,6 +323,7 @@ contract VqStakingTest is Test {
 
         vm.prank(bob);
         staking.stake(500e18);
+        _season(bob);
 
         vm.prank(bob);
         staking.claimRewards();
@@ -344,6 +340,9 @@ contract VqStakingTest is Test {
         vm.prank(bob);
         staking.stake(1000e18);
 
+        _season(alice);
+        _season(bob);
+
         // Push 400 reward tokens — Alice should get 75%, Bob 25%
         rewardToken.transfer(address(staking), 400e18);
 
@@ -354,6 +353,38 @@ contract VqStakingTest is Test {
         vm.prank(bob);
         staking.claimRewards();
         assertApproxEqAbs(rewardToken.balanceOf(bob), 100e18, 1);
+    }
+
+    // ------------------------------------------------------------------
+    // Reward warm-up (anti-JIT-sniping): new stakes earn nothing for
+    // REWARD_WARMUP; unstake stays instant.
+    // ------------------------------------------------------------------
+
+    function test_NewStakeEarnsNothingDuringWarmup() public {
+        _depositVqALCX(alice, 1000e18);
+
+        vm.prank(alice);
+        staking.stake(1000e18);
+
+        // Donation during the warm-up goes to nobody (distribution base is 0).
+        rewardToken.transfer(address(staking), 100e18);
+        vm.prank(alice);
+        staking.claimRewards();
+        assertEq(staking.earned(alice), 0, "warming stake earns nothing");
+    }
+
+    function test_UnstakeIsInstantDuringWarmup() public {
+        _depositVqALCX(alice, 1000e18);
+
+        vm.prank(alice);
+        staking.stake(1000e18);
+
+        // No lockup: full unstake immediately after staking.
+        vm.prank(alice);
+        staking.unstake(1000e18);
+        assertEq(vault.balanceOf(alice), 1000e18);
+        assertEq(staking.stakedBalanceOf(alice), 0);
+        assertEq(staking.getVotes(alice), 0);
     }
 
     // ------------------------------------------------------------------

@@ -184,10 +184,11 @@ When governance pauses the vault:
 - **Open:** claims of already-escrowed positions (`deposit`/`mint` for filled deposit requests, `withdraw`/`redeem` for filled withdraw requests), vqALCX transfers, and `burnViaAuction` (instant-exit auction burns).
 - Exit liveness under pause is therefore claim-only: users with already-fulfilled requests can always exit; users cannot queue *new* exits during an incident.
 
-**Lazy drip model (timestamp-based)** The queue advances automatically as a side effect of state-changing vault calls (requests, claims, cancels, auction hooks, parameter changes, and the permissionless `drip()`). Views are pure reads — they report the state persisted by the last transaction and never advance the queue. Each drip call processes at most `MAX_DRIP_ENTRIES` queue entries; if the queue is longer, `lastDripTime` is left untouched so the unspent fulfillment budget continues on the next call (bounded gas, unbounded progress over multiple calls):
+**Lazy drip model (timestamp-based)** The queue advances automatically as a side effect of state-changing vault calls (requests, claims, cancels, auction hooks, parameter changes, and the permissionless `drip()`). Views are pure reads — they report the state persisted by the last transaction and never advance the queue. Each elapsed window's budget is granted exactly once into a persisted `availableBudget` accumulator (`availableBudget += rate * (now - lastDripTime)`; `lastDripTime` always advances). A drip call touches at most `MAX_DRIP_ENTRIES` entries; if the queue is longer, the unspent budget carries in `availableBudget` and continues on the next call (bounded gas, unbounded progress over multiple calls, and a window's budget can never be re-granted — INV-Q-3):
 
 ```
-fulfillable = min(rate * (block.timestamp - lastDripTime), queueDepth)
+fulfillable = min(availableBudget, queueDepth)
+// leftover when the queue is fully caught up -> availableAuctionCapacity
 ```
 
 The bucket processes FIFO entries from the front until `fulfillable` is exhausted. No separate advance/fulfill transaction needed. **All timing uses `block.timestamp`, never `block.number`** (TC-3 — Aragon requirement for consistent governance clock).
@@ -264,7 +265,7 @@ The staking contract bridges the DAO-agnostic vault to the vendor-specific DAO f
 **Responsibilities:**
 - **Staking:** users deposit vqALCX into the staking contract to participate in governance. The staking contract tracks each user's staked balance in an internal mapping. No receipt token is issued — balances are tracked internally.
 - **Voting power:** the staking contract implements OpenZeppelin `VotesExtended` (TC-5). The DAO reads voting weight via `getPastVotes`, `getPastBalanceOf`, `getPastDelegate`. `_getVotingUnits(account)` returns the internal staked balance. Delegation operates on staked balances.
-- **Reward distribution:** external reward sources transfer assets to the staking contract, which distributes them proportionally to stakers. The vault itself does not handle rewards.
+- **Reward distribution:** external reward sources transfer assets to the staking contract, which distributes them proportionally to *seasoned* stakers — balances that have been staked longer than `REWARD_WARMUP` (1 day). Newly staked balances earn nothing during the warm-up (a just-in-time stake cannot capture a donation), while voting power is live immediately. The vault itself does not handle rewards.
 - **Unstaking:** users call `unstake(amount)` to withdraw their vqALCX from the staking contract. Instant — no lockup or queue.
 
 **Why a separate contract?**
@@ -634,7 +635,8 @@ Each queue (deposit and withdraw) is an independent leaky bucket:
 
 - **`capacity`** — maximum total amount that can be pending at once.
 - **`rate`** — amount fulfilled per second (the drip rate).
-- **`lastDripTime`** — timestamp of the last completed catchup. On state-changing vault interactions, the bucket catches up: `fulfillable = min(rate * (now - lastDripTime), queueDepth)`. A drip call touches at most `MAX_DRIP_ENTRIES` entries; if the queue is longer, `lastDripTime` is not advanced and the budget carries over to the next call.
+- **`lastDripTime`** — timestamp of the last completed catchup. On state-changing vault interactions, the bucket catches up by granting `rate * (now - lastDripTime)` into `availableBudget` exactly once. A drip call touches at most `MAX_DRIP_ENTRIES` entries; if the queue is longer, the unspent budget carries over in `availableBudget` to the next call.
+- **`availableBudget`** — fulfillment budget granted but not yet spent on fills; the unspent remainder when a drip call is capped. Rebased proportionally with `availableAuctionCapacity` on rate changes.
 - **Two-counter structure** — `head` and `tail` indices provide O(1) enqueue, O(1) dequeue, and O(1) position lookup.
 - **`queueDepth`** — total amount pending in the queue (`tail - head`).
 - Parameters are set by governance.

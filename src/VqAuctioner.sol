@@ -16,14 +16,13 @@ interface IVqALCX {
     function depositAuctionCapacity() external view returns (uint256);
     function withdrawAuctionCapacity() external view returns (uint256);
     function acceptAuctioneer() external;
+    function paused() external view returns (bool);
 }
 
 contract VqAuctioner is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     struct Round {
-        uint256 roundId;
-        bool isDeposit;
         uint256 startTime;
         uint256 endTime;
         uint256 capacity;
@@ -32,12 +31,6 @@ contract VqAuctioner is ReentrancyGuard {
         address highestBidder;
         uint256 highestBidAmount;
         uint256 highestBidPrice;
-    }
-
-    struct LockedBid {
-        address bidder;
-        uint256 amount;
-        uint256 price;
     }
 
     IERC20 public immutable alcx;
@@ -52,12 +45,6 @@ contract VqAuctioner is ReentrancyGuard {
 
     mapping(uint256 => Round) public depositRounds;
     mapping(uint256 => Round) public withdrawRounds;
-
-    mapping(uint256 => mapping(address => LockedBid)) public depositLockedBids;
-    mapping(uint256 => mapping(address => LockedBid)) public withdrawLockedBids;
-
-    mapping(uint256 => uint256) public depositLockedTotal;
-    mapping(uint256 => uint256) public withdrawLockedTotal;
 
     event DepositBidPlaced(uint256 indexed roundId, address indexed bidder, uint256 amount, uint256 price);
     event WithdrawBidPlaced(uint256 indexed roundId, address indexed bidder, uint256 amount, uint256 price);
@@ -88,8 +75,6 @@ contract VqAuctioner is ReentrancyGuard {
 
     /// @notice Lets this contract accept the vault's auctioneer role after governance proposed it.
     /// @dev Permissionless: only succeeds while the vault's pending auctioneer is this contract.
-    /// Completes the two-step handover lifecycle (deployment-time authorization and re-authorization
-    /// of an instance holding locked escrow) without impersonation.
     function acceptVaultAuctioneer() external {
         vault.acceptAuctioneer();
     }
@@ -100,8 +85,6 @@ contract VqAuctioner is ReentrancyGuard {
         uint256 capacity = rate * roundDuration;
 
         depositRounds[roundId] = Round({
-            roundId: roundId,
-            isDeposit: true,
             startTime: block.timestamp,
             endTime: block.timestamp + roundDuration,
             capacity: capacity,
@@ -121,8 +104,6 @@ contract VqAuctioner is ReentrancyGuard {
         uint256 capacity = rate * roundDuration;
 
         withdrawRounds[roundId] = Round({
-            roundId: roundId,
-            isDeposit: false,
             startTime: block.timestamp,
             endTime: block.timestamp + roundDuration,
             capacity: capacity,
@@ -159,26 +140,17 @@ contract VqAuctioner is ReentrancyGuard {
         if (block.timestamp > round.endTime) revert RoundNotActive();
         if (round.totalFilled + amount > round.capacity) revert InsufficientCapacity();
 
-        // english style
         if (round.highestBidder != address(0) && maxPrice <= round.highestBidPrice) {
             revert BidTooLow();
         }
 
-        // refund prev bidder
         if (round.highestBidder != address(0)) {
-            address prevBidder = round.highestBidder;
-            LockedBid storage prevBid = depositLockedBids[roundId][prevBidder];
-            uint256 refundAmount = prevBid.price;
-            prevBid.price = 0;
-            depositLockedTotal[roundId] -= refundAmount;
-            alcx.safeTransfer(prevBidder, refundAmount);
-            emit RefundIssued(prevBidder, refundAmount);
+            uint256 refundAmount = round.highestBidPrice;
+            alcx.safeTransfer(round.highestBidder, refundAmount);
+            emit RefundIssued(round.highestBidder, refundAmount);
         }
 
-        // lock new highest bid
         alcx.safeTransferFrom(msg.sender, address(this), maxPrice);
-        depositLockedBids[roundId][msg.sender] = LockedBid({bidder: msg.sender, amount: amount, price: maxPrice});
-        depositLockedTotal[roundId] += maxPrice;
 
         round.highestBidder = msg.sender;
         round.highestBidAmount = amount;
@@ -212,21 +184,13 @@ contract VqAuctioner is ReentrancyGuard {
             }
         }
 
-        // refund prev high bidder
         if (round.highestBidder != address(0)) {
-            address prevBidder = round.highestBidder;
-            LockedBid storage prevBid = withdrawLockedBids[roundId][prevBidder];
-            uint256 refundAmount = prevBid.amount;
-            prevBid.amount = 0;
-            withdrawLockedTotal[roundId] -= refundAmount;
-            vqALCX.safeTransfer(prevBidder, refundAmount);
-            emit RefundIssued(prevBidder, refundAmount);
+            uint256 refundAmount = round.highestBidAmount;
+            vqALCX.safeTransfer(round.highestBidder, refundAmount);
+            emit RefundIssued(round.highestBidder, refundAmount);
         }
 
-        // lock new lowest bid
         vqALCX.safeTransferFrom(msg.sender, address(this), amount);
-        withdrawLockedBids[roundId][msg.sender] = LockedBid({bidder: msg.sender, amount: amount, price: minPrice});
-        withdrawLockedTotal[roundId] += amount;
 
         round.highestBidder = msg.sender;
         round.highestBidAmount = amount;
@@ -242,7 +206,6 @@ contract VqAuctioner is ReentrancyGuard {
         if (round.settled) revert RoundAlreadySettled();
         if (block.timestamp < round.endTime) revert RoundNotActive();
         if (round.highestBidder == address(0)) {
-            // no bids arrived
             round.settled = true;
             _startDepositRound();
             return;
@@ -253,14 +216,20 @@ contract VqAuctioner is ReentrancyGuard {
         uint256 bidAmount = round.highestBidAmount;
         uint256 clearingPrice = round.highestBidPrice;
 
-        LockedBid storage winningBid = depositLockedBids[roundId][winner];
-        winningBid.price = 0;
-        depositLockedTotal[roundId] -= clearingPrice;
-
         vault.drip();
         uint256 fill = bidAmount;
         uint256 available = vault.depositAuctionCapacity();
         if (fill > available) fill = available;
+
+        if (fill > 0 && vault.paused()) {
+            // Pause gates minting in the vault; the winner's locked bid must not be
+            // stranded. Settle the round empty and make the winner whole (principal,
+            // no fill -> no premium). Competition resumes after unpause.
+            alcx.safeTransfer(winner, clearingPrice);
+            emit DepositRoundSettled(roundId, winner, 0, clearingPrice);
+            _startDepositRound();
+            return;
+        }
 
         uint256 charged = (clearingPrice * fill) / bidAmount;
         uint256 premium = charged > fill ? charged - fill : 0;
@@ -299,10 +268,6 @@ contract VqAuctioner is ReentrancyGuard {
         address winner = round.highestBidder;
         uint256 bidAmount = round.highestBidAmount;
         uint256 clearingPrice = round.highestBidPrice;
-
-        LockedBid storage winningBid = withdrawLockedBids[roundId][winner];
-        winningBid.amount = 0;
-        withdrawLockedTotal[roundId] -= bidAmount;
 
         vault.drip();
         uint256 fill = bidAmount;

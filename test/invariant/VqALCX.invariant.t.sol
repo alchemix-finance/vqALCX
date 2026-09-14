@@ -3,19 +3,15 @@ pragma solidity 0.8.36;
 
 import {Test} from "@forge-std/Test.sol";
 import {StdInvariant} from "@forge-std/StdInvariant.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {VqALCX} from "../../src/VqALCX.sol";
 import {VqALCXHandler} from "./handlers/VqALCXHandler.sol";
-
-contract MockALCXInvariant is ERC20 {
-    constructor() ERC20("Alchemix", "ALCX") {}
-}
+import {MockALCX} from "../mocks/Mocks.sol";
 
 /// @title VqALCX Invariant Tests
 /// @notice Fuzz tests that verify system invariants hold across random valid operations
 contract VqALCXInvariantTest is StdInvariant, Test {
     VqALCX public vault;
-    MockALCXInvariant public alcx;
+    MockALCX public alcx;
     VqALCXHandler public handler;
 
     address public governance = address(0xCAFE);
@@ -24,7 +20,7 @@ contract VqALCXInvariantTest is StdInvariant, Test {
     uint256 constant CAPACITY = 10_000e18;
 
     function setUp() public {
-        alcx = new MockALCXInvariant();
+        alcx = new MockALCX();
         vault = new VqALCX(address(alcx), governance, address(0));
 
         vm.prank(governance);
@@ -108,10 +104,10 @@ contract VqALCXInvariantTest is StdInvariant, Test {
     // INV-Q-7: head <= tail always (no underflow)
     // ------------------------------------------------------------------
     function invariant_HeadLeTail() public view {
-        (,, uint256 dHead, uint256 dTail,,,) = vault.depositBucket();
+        (,, uint256 dHead, uint256 dTail,,,,) = vault.depositBucket();
         assertLe(dHead, dTail, "INV-Q-7: deposit head > tail");
 
-        (,, uint256 wHead, uint256 wTail,,,) = vault.withdrawBucket();
+        (,, uint256 wHead, uint256 wTail,,,,) = vault.withdrawBucket();
         assertLe(wHead, wTail, "INV-Q-7: withdraw head > tail");
     }
 }

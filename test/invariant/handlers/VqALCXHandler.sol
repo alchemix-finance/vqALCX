@@ -25,15 +25,12 @@ contract VqALCXHandler is Test {
         for (uint256 i = 0; i < 5; i++) {
             address actor = address(uint160(0x1000 + i));
             actors.push(actor);
-            alcx.approve(address(vault), type(uint256).max);
             vm.startPrank(actor);
             alcx.approve(address(vault), type(uint256).max);
             vm.stopPrank();
         }
 
-        // Mint tokens to each actor
         for (uint256 i = 0; i < actors.length; i++) {
-            // Use vm.deal for ETH, or directly write storage for ERC20
             deal(address(alcx), actors[i], INITIAL_MINT);
         }
     }
@@ -45,7 +42,6 @@ contract VqALCXHandler is Test {
 
     function requestDeposit(uint256 actorSeed, uint256 amount) public useActor(actorSeed) {
         amount = bound(amount, 1e18, CAPACITY);
-        // Check capacity
         if (vault.depositQueueDepth() + amount > CAPACITY) return;
 
         vm.startPrank(currentActor);

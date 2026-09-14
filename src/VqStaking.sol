@@ -19,8 +19,19 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
     IERC20 public immutable vqALCX;
     IERC20 public immutable rewardToken;
 
+    /// @notice Newly staked balances earn no rewards for this long (anti-sniping):
+    /// a warm-up batch only joins the earning pool at the first reward update after
+    /// its maturity, applied after that update's distribution, so just-in-time
+    /// stakes can never capture distributions that arrive during the warm-up.
+    /// ponytail: single merged batch per account (a top-up re-arms the pending
+    /// batch's maturity); per-deposit maturities if top-up patterns ever matter.
+    uint256 public constant REWARD_WARMUP = 1 days;
+
     mapping(address => uint256) private _stakedBalances;
+    mapping(address => uint256) private _warmingBalances;
+    mapping(address => uint256) private _warmingUntil;
     uint256 private _totalStaked;
+    uint256 private _totalWarming;
 
     uint256 public rewardPerShare;
     uint256 public constant SHARES_PRECISION = 1e18;
@@ -30,26 +41,14 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
 
     uint256 private _lastRewardBalance;
 
-    // ------------------------------------------------------------------------
-    // Events
-    // ------------------------------------------------------------------------
-
     event Staked(address indexed user, uint256 amount);
     event Unstaked(address indexed user, uint256 amount);
     event RewardsAccrued(uint256 amount);
     event RewardsClaimed(address indexed user, uint256 amount);
 
-    // ------------------------------------------------------------------------
-    // Errors
-    // ------------------------------------------------------------------------
-
     error InsufficientBalance();
     error ZeroAmount();
     error SameRewardToken();
-
-    // ------------------------------------------------------------------------
-    // Constructor
-    // ------------------------------------------------------------------------
 
     constructor(address _vqALCX, address _rewardToken) EIP712("VqStaking", "1") {
         if (_vqALCX == _rewardToken) revert SameRewardToken();
@@ -57,9 +56,7 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
         rewardToken = IERC20(_rewardToken);
     }
 
-    // ------------------------------------------------------------------------
     // Timestamp clock (TC-3)
-    // ------------------------------------------------------------------------
 
     function clock() public view virtual override returns (uint48) {
         return uint48(block.timestamp);
@@ -71,20 +68,26 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
         return "mode=timestamp";
     }
 
-    // ------------------------------------------------------------------------
-    // VotesExtended hook — returns internal staked balance
-    // ------------------------------------------------------------------------
-
+    // TC-5: voting units are the internal staked balance (warming included)
     function _getVotingUnits(address account) internal view virtual override returns (uint256) {
-        return _stakedBalances[account];
+        return _stakedBalances[account] + _warmingBalances[account];
     }
 
-    // ------------------------------------------------------------------------
-    // Reward accrual — lazy, balance-delta based
-    // ------------------------------------------------------------------------
+    function _seasonWarming(address account) internal {
+        uint256 warming = _warmingBalances[account];
+        if (warming != 0 && block.timestamp >= _warmingUntil[account]) {
+            _warmingBalances[account] = 0;
+            _stakedBalances[account] += warming;
+            _totalWarming -= warming;
+            _totalStaked += warming;
+        }
+    }
 
     /// @notice Accrues rewards based on reward token balance delta since last accrual.
     /// @dev Anyone can call this externally to update accounting at their own gas cost.
+    ///      Distribution base is seasoned (post-warm-up) stake only; seasoning happens
+    ///      in _updateUserRewards after the caller's snapshot, so a maturing batch
+    ///      earns from that point onward and never retroactively.
     function accrueRewards() public {
         uint256 currentBalance = rewardToken.balanceOf(address(this));
         uint256 newRewards = currentBalance - _lastRewardBalance;
@@ -100,11 +103,8 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
         uint256 balance = _stakedBalances[account];
         accruedRewards[account] += (balance * (rewardPerShare - userRewardPerSharePaid[account])) / SHARES_PRECISION;
         userRewardPerSharePaid[account] = rewardPerShare;
+        _seasonWarming(account);
     }
-
-    // ------------------------------------------------------------------------
-    // Staking
-    // ------------------------------------------------------------------------
 
     function stake(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
@@ -112,8 +112,9 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
         _updateUserRewards(msg.sender);
 
         vqALCX.safeTransferFrom(msg.sender, address(this), amount);
-        _stakedBalances[msg.sender] += amount;
-        _totalStaked += amount;
+        _warmingBalances[msg.sender] += amount;
+        _totalWarming += amount;
+        _warmingUntil[msg.sender] = block.timestamp + REWARD_WARMUP;
 
         _transferVotingUnits(address(0), msg.sender, amount);
 
@@ -129,12 +130,20 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
 
     function unstake(uint256 amount) external nonReentrant {
         if (amount == 0) revert ZeroAmount();
-        if (_stakedBalances[msg.sender] < amount) revert InsufficientBalance();
+        if (_stakedBalances[msg.sender] + _warmingBalances[msg.sender] < amount) revert InsufficientBalance();
 
         _updateUserRewards(msg.sender);
 
-        _stakedBalances[msg.sender] -= amount;
-        _totalStaked -= amount;
+        // Deduct from the seasoned balance first so the (immature) warm-up batch
+        // keeps its place in line; unstake itself stays instant — no lockup.
+        uint256 fromSeasoned = amount > _stakedBalances[msg.sender] ? _stakedBalances[msg.sender] : amount;
+        _stakedBalances[msg.sender] -= fromSeasoned;
+        _totalStaked -= fromSeasoned;
+        uint256 fromWarming = amount - fromSeasoned;
+        if (fromWarming > 0) {
+            _warmingBalances[msg.sender] -= fromWarming;
+            _totalWarming -= fromWarming;
+        }
 
         _transferVotingUnits(msg.sender, address(0), amount);
 
@@ -143,16 +152,12 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
         emit Unstaked(msg.sender, amount);
     }
 
-    // ------------------------------------------------------------------------
-    // Views
-    // ------------------------------------------------------------------------
-
     function stakedBalanceOf(address account) external view returns (uint256) {
-        return _stakedBalances[account];
+        return _stakedBalances[account] + _warmingBalances[account];
     }
 
     function totalStaked() external view returns (uint256) {
-        return _totalStaked;
+        return _totalStaked + _totalWarming;
     }
 
     function earned(address account) external view returns (uint256) {
@@ -169,7 +174,8 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
     function claimRewards() external nonReentrant {
         _updateUserRewards(msg.sender);
         uint256 reward = accruedRewards[msg.sender];
-        if (reward == 0) revert ZeroAmount();
+        // Zero-reward claim is a no-op (it still seasons a matured warm-up batch).
+        if (reward == 0) return;
 
         accruedRewards[msg.sender] = 0;
 

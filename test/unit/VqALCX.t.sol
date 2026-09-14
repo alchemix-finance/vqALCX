@@ -2,16 +2,8 @@
 pragma solidity 0.8.36;
 
 import {Test} from "@forge-std/Test.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {VqALCX} from "../../src/VqALCX.sol";
-
-contract MockALCX is ERC20 {
-    constructor() ERC20("Alchemix", "ALCX") {}
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
+import {MockALCX} from "../mocks/Mocks.sol";
 
 contract VqALCXTest is Test {
     VqALCX public vault;
@@ -117,7 +109,6 @@ contract VqALCXTest is Test {
         // Warp forward enough time: 1000 / 100 = 10 seconds
         vm.warp(block.timestamp + 11);
 
-        // Trigger drip
         vault.drip();
 
         VqALCX.Request memory req = vault.getDepositRequest(0);
@@ -215,7 +206,6 @@ contract VqALCXTest is Test {
     // ------------------------------------------------------------------
 
     function test_RequestWithdrawAndFulfill() public {
-        // First deposit
         vm.prank(alice);
         vault.requestDeposit(1000e18);
         vm.warp(block.timestamp + 11);
@@ -267,14 +257,12 @@ contract VqALCXTest is Test {
     }
 
     function test_CancelWithdrawRequest() public {
-        // Deposit first
         vm.prank(alice);
         vault.requestDeposit(1000e18);
         vm.warp(block.timestamp + 11);
         vm.prank(alice);
         vault.deposit(1000e18, alice);
 
-        // Request withdraw
         vm.prank(alice);
         vault.requestWithdraw(1000e18);
 
@@ -474,7 +462,6 @@ contract VqALCXTest is Test {
     // ------------------------------------------------------------------
 
     function test_MintViaAuction() public {
-        // Warp to accumulate auction capacity
         vm.warp(block.timestamp + 10); // 10s * 100/s = 1000 capacity
 
         vm.prank(auctioneer);
@@ -512,7 +499,6 @@ contract VqALCXTest is Test {
     // ------------------------------------------------------------------
 
     function test_FIFOOrdering() public {
-        // Two deposit requests
         vm.prank(alice);
         vault.requestDeposit(500e18);
         vm.prank(bob);
@@ -530,7 +516,7 @@ contract VqALCXTest is Test {
     }
 
     // ------------------------------------------------------------------
-    // Double-claim prevention (CRITICAL security test)
+    // Double-claim prevention
     // ------------------------------------------------------------------
 
     function test_DepositCannotBeDoubleClaimed() public {
@@ -538,40 +524,33 @@ contract VqALCXTest is Test {
         vault.requestDeposit(1000e18);
         vm.warp(block.timestamp + 11);
 
-        // First deposit succeeds
         vm.prank(alice);
         vault.deposit(1000e18, alice);
         assertEq(vault.balanceOf(alice), 1000e18);
 
-        // Second deposit on same request must revert
         vm.prank(alice);
         vm.expectRevert(VqALCX.RequestNotFulfillable.selector);
         vault.deposit(1000e18, alice);
 
-        // Balance unchanged
         assertEq(vault.balanceOf(alice), 1000e18);
     }
 
     function test_WithdrawCannotBeDoubleClaimed() public {
-        // Deposit
         vm.prank(alice);
         vault.requestDeposit(1000e18);
         vm.warp(block.timestamp + 11);
         vm.prank(alice);
         vault.deposit(1000e18, alice);
 
-        // Request withdraw
         vm.prank(alice);
         vault.requestWithdraw(1000e18);
         vm.warp(block.timestamp + 11);
 
-        // First withdraw succeeds
         uint256 balanceBefore = alcx.balanceOf(alice);
         vm.prank(alice);
         vault.withdraw(1000e18, alice, alice);
         assertEq(alcx.balanceOf(alice), balanceBefore + 1000e18);
 
-        // Second withdraw must revert
         vm.prank(alice);
         vm.expectRevert(VqALCX.RequestNotFulfillable.selector);
         vault.withdraw(1000e18, alice, alice);
