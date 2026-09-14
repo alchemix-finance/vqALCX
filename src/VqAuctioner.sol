@@ -15,6 +15,7 @@ interface IVqALCX {
     function drip() external;
     function depositAuctionCapacity() external view returns (uint256);
     function withdrawAuctionCapacity() external view returns (uint256);
+    function acceptAuctioneer() external;
 }
 
 contract VqAuctioner is ReentrancyGuard {
@@ -72,13 +73,25 @@ contract VqAuctioner is ReentrancyGuard {
     error NotRoundWinner();
     error ZeroAmount();
     error InvalidPrice();
+    error InvalidConstructorParams();
 
     constructor(address _alcx, address _vqALCX, address _daoTreasury, uint256 _roundDuration) {
+        if (_alcx == address(0) || _vqALCX == address(0) || _daoTreasury == address(0) || _roundDuration == 0) {
+            revert InvalidConstructorParams();
+        }
         alcx = IERC20(_alcx);
         vqALCX = IERC20(_vqALCX);
         vault = IVqALCX(_vqALCX);
         daoTreasury = _daoTreasury;
         roundDuration = _roundDuration;
+    }
+
+    /// @notice Lets this contract accept the vault's auctioneer role after governance proposed it.
+    /// @dev Permissionless: only succeeds while the vault's pending auctioneer is this contract.
+    /// Completes the two-step handover lifecycle (deployment-time authorization and re-authorization
+    /// of an instance holding locked escrow) without impersonation.
+    function acceptVaultAuctioneer() external {
+        vault.acceptAuctioneer();
     }
 
     function _startDepositRound() internal returns (uint256 roundId) {
@@ -185,9 +198,18 @@ contract VqAuctioner is ReentrancyGuard {
         if (round.totalFilled + amount > round.capacity) revert InsufficientCapacity();
 
         // For withdrawals: minPrice is the minimum ALCX the bidder wants to receive
-        // A lower minPrice = more competitive (willing to accept less)
-        if (round.highestBidder != address(0) && minPrice >= round.highestBidPrice) {
-            revert BidTooLow();
+        // A lower minPrice = more competitive (willing to accept less).
+        // A strictly lower price always outbids; at equal price, a strictly larger
+        // amount outbids. Without the equal-price escape hatch, a floor-price bid
+        // (e.g. minPrice = 0) could never be replaced and a dust bid would
+        // monopolize the round.
+        if (round.highestBidder != address(0)) {
+            if (minPrice > round.highestBidPrice) {
+                revert BidTooLow();
+            }
+            if (minPrice == round.highestBidPrice && amount <= round.highestBidAmount) {
+                revert BidTooLow();
+            }
         }
 
         // refund prev high bidder

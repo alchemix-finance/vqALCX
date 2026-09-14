@@ -31,7 +31,7 @@ The system has three layers:
 | 1 | **Governance attack resistance** — deposit and exit flows must be rate-limited by configurable bucket parameters such that voting power cannot be acquired or disposed of within a single block | This is the primary purpose of the protocol. Without it, the entire governance stack is vulnerable to flash-loan attacks, rushed and bank runs |
 | 2 | **Principal guarantee** — every backed vqALCX share must always be redeemable for exactly 1 ALCX at the watermark | Users loose WITH the protocol if backing gets below 1:1 but not TO the protocol. Everyone shares losses equally. |
 | 3 | **Pluggable auctioneer** — auction pricing logic must be replaceable without redeploying the core vault | Economic conditions change. The protocol must allow swapping the auctioneer via governance without disrupting user positions. |
-| 4 | **Permissionless progression** — the queue must advance without relying on any specific operator or keeper | Any vault interaction (deposit, withdraw, preview, transfer) triggers lazy bucket drip, processing the queue as a side effect. No dedicated keeper role required. Walkaway safety. |
+| 4 | **Permissionless progression** — the queue must advance without relying on any specific operator or keeper | Any state-changing vault interaction (requests, claims, auction hooks, parameter changes) triggers lazy bucket drip, processing the queue as a side effect; the public `drip()` lets anyone advance both queues. Views are pure reads and do not drip. No dedicated keeper role required. Walkaway safety. |
 
 ## 1.4 Stakeholders
 
@@ -105,7 +105,7 @@ The veQueue protocol does **not** encompass:
 
 | Actor | Role | Interaction Pattern |
 |-------|------|-------------------|
-| **Depositors / vqALCX holders** | Primary users who deposit ALCX to receive governance-secure vqALCX shares | Call `requestDeposit()` to enter the deposit queue. Queue advances lazily on any vault interaction. Call `deposit()` when position is fulfillable. Can transfer vqALCX freely. Call `requestWithdraw()` to enter the exit queue. Call `withdraw()` when position is fulfillable. Can stake vqALCX in the staking contract to earn rewards and participate in governance. |
+| **Depositors / vqALCX holders** | Primary users who deposit ALCX to receive governance-secure vqALCX shares | Call `requestDeposit()` to enter the deposit queue. Queue advances lazily on state-changing vault interactions. Call `deposit()` when position is fulfillable. Can transfer vqALCX freely. Call `requestWithdraw()` to enter the exit queue. Call `withdraw()` when position is fulfillable. Can stake vqALCX in the staking contract to earn rewards and participate in governance. |
 | **Auction participants** | Users who want immediate execution without waiting for the queue | Bid in rolling auctions for deposit or withdraw execution. Auctions run continuously. Can bid on full or fractional amounts. No queue position required — auctions and queue are orthogonal paths. |
 | **DAO voters** | Token holders who participate in governance votes | Vote on Aragon (or equivalent) proposals. Their voting weight is derived from **staked** vqALCX in the staking contract at snapshot time. veQueue does not define the voting mechanism — the staking contract bridges to the DAO. |
 | **MEV bots** | General blockchain participants, not a protocol role | MEV bots are an ever-present force on Ethereum. Their presence must be accounted for in queue ordering (FIFO prevents front-running) and rolling auction design. They have no special interface with the protocol and no privileged access. |
@@ -171,12 +171,20 @@ vqALCX is an ERC4626-compliant vault. Users choose between two orthogonal paths:
 
 Users can cancel a pending queue request via `cancelDepositRequest()` or `cancelWithdrawRequest()`. Cancellation removes the entry from the queue and refunds the user, minus a penalty:
 
-- **Deposit cancellation:** the user's request is voided. No ALCX was transferred yet (transfer happens at `deposit()`, not `requestDeposit()`), so there is nothing to refund — the slot simply opens up. A cancellation fee in ALCX is charged to prevent queue spam (requesting then canceling repeatedly to hold capacity).
+- **Deposit cancellation:** the user's request is voided. ALCX was escrowed into the vault at `requestDeposit()` time; the unfilled remainder is refunded minus a penalty. The filled portion (if any) stays claimable as shares. A cancellation fee in ALCX is charged to prevent queue spam (requesting then canceling repeatedly to hold capacity).
 - **Withdrawal cancellation:** the user's withdraw request is voided. If vqALCX was locked at `requestWithdraw()` time, it is returned minus a penalty. The penalty discourages withdraw spam that could artificially inflate the withdraw queue depth.
 - **Penalty destination:** penalties go above the watermark as protocol profit.
 - **Penalty amount:** governance-configurable, with hardcoded safety bounds to prevent punitive levels.
 
-**Lazy drip model (timestamp-based)** The queue advances automatically as a side effect of any vault interaction. On every call (deposit, withdraw, preview, transfer, or any state read), the vault catches the bucket up to `block.timestamp`:
+**Pause semantics (emergency brake matrix):**
+
+When governance pauses the vault:
+
+- **Blocked:** new `requestDeposit` and `requestWithdraw` (entry and exit queueing), and `mintViaAuction` (instant-entry auction mints).
+- **Open:** claims of already-escrowed positions (`deposit`/`mint` for filled deposit requests, `withdraw`/`redeem` for filled withdraw requests), vqALCX transfers, and `burnViaAuction` (instant-exit auction burns).
+- Exit liveness under pause is therefore claim-only: users with already-fulfilled requests can always exit; users cannot queue *new* exits during an incident.
+
+**Lazy drip model (timestamp-based)** The queue advances automatically as a side effect of state-changing vault calls (requests, claims, cancels, auction hooks, parameter changes, and the permissionless `drip()`). Views are pure reads — they report the state persisted by the last transaction and never advance the queue. Each drip call processes at most `MAX_DRIP_ENTRIES` queue entries; if the queue is longer, `lastDripTime` is left untouched so the unspent fulfillment budget continues on the next call (bounded gas, unbounded progress over multiple calls):
 
 ```
 fulfillable = min(rate * (block.timestamp - lastDripTime), queueDepth)
@@ -196,7 +204,7 @@ mapping(uint256 => Request) requests;  // requestId → (owner, amount)
 - Lazy drip: process from `head`, mark fulfilled, increment `head` — O(1) per fulfilled request
 - Queue depth: `tail - head` — O(1)
 
-ERC4626 preview functions (`previewDeposit`, `previewRedeem`, `previewWithdraw`, `previewMint`) return the currently depositable or redeemable amounts according to the queue and bucket state. Deposits, withdrawals, and redeems are 100% faithful to previews — what you see is what you get.
+ERC4626 preview functions (`previewDeposit`, `previewRedeem`, `previewWithdraw`, `previewMint`) are exact 1:1 conversions — they convert between assets and shares at the pegged rate. They are conversion quotes, not executability signals: whether a claim will succeed depends on queue state and is signalled by the `max*` functions, which quote the largest amount a single claim can execute for the claimant.
 
 ## 4.2 Auction mechanism — "instant fill" capacity auctions
 
@@ -215,7 +223,7 @@ The auction contract (`vqAuctioner`) runs continuous rolling auctions for both d
 The auctioneer is pluggable. The v1 implementation uses a conventional **English ascending auction** with rolling rounds:
 
 - **Each round has a fixed duration** (governance-configurable, e.g. 1 hour).
-- **Bidding is ascending** — each new bid must exceed the current highest bid. Bidders lock their ALCX (deposit auctions) or vqALCX (withdrawal auctions) into the auctioneer at bid time to prevent griefing.
+- **Bidding is competitive in both directions** — deposit auctions ascend on `maxPrice` (each new bid must strictly exceed the current highest). Withdrawal auctions descend on `minPrice` (each new bid must be strictly lower), with an equal-price escape hatch: at the same `minPrice`, a bid for strictly more capacity replaces the leader. This keeps floor-price (`minPrice = 0`) bids replaceable so a dust bid cannot monopolize a round. Bidders lock their ALCX (deposit auctions) or vqALCX (withdrawal auctions) into the auctioneer at bid time to prevent griefing.
 - **Outbid funds are refunded** — when a higher bid arrives, the previous bidder's locked funds are returned.
 - **Round settles at expiry** — the highest bidder wins. The clearing price is the winning bid amount. The winner pays base (1:1) + premium (above watermark).
 - **Overlapping rounds** — when a round settles, the next round is already active. There is always a live auction.
@@ -280,7 +288,7 @@ getPastBalanceOf(account: address, timepoint: uint256) -> uint256
 getPastDelegate(account: address, timepoint: uint256) -> address
 delegate(delegatee: address)
 clock() -> uint48          // returns block.timestamp (TC-3)
-CLOCK_MODE() -> string     // "mode=blockstamp"
+CLOCK_MODE() -> string     // "mode=timestamp" (ERC-6372 canonical)
 ```
 
 ## 4.5 vqAuctioner function signatures
@@ -600,7 +608,7 @@ sequenceDiagram
 
 ## 8.1 ERC4626 compliance (vault — DAO-agnostic)
 
-The vqALCX vault implements the full ERC4626 interface. Preview functions reflect the real queue state — no optimistic or estimated values. Deposits and withdrawals through the queue are faithful to previews. This ensures composability with DeFi infrastructure (wallets, DEXes, lending protocols) that rely on standard vault interfaces. The vault contains zero DAO-framework-specific logic.
+The vqALCX vault implements the full ERC4626 interface. Preview functions are exact 1:1 conversions at the pegged rate (never optimistic about share pricing). Executability of a claim is a queue property and is signalled by the `max*` functions, which quote the claimant's largest single-request claimable so that `deposit(maxDeposit())` always succeeds. This ensures composability with DeFi infrastructure (wallets, DEXes, lending protocols) that rely on standard vault interfaces. The vault contains zero DAO-framework-specific logic.
 
 **Non-rebalancing (TC-4):** vqALCX is NOT a rebasing or yield-accruing token. `balanceOf(user)` only changes through explicit `mint`, `burn`, and `transfer`. The ERC-4626 share price is pegged 1:1 at the watermark — it does not float upward over time. This is critical because the staking contract uses vqALCX balances as the basis for voting power (TC-5). If balances silently changed (rebasing, auto-compounding), historical lookups would diverge from historical voting power, breaking Aragon snapshot logic.
 
@@ -626,18 +634,18 @@ Each queue (deposit and withdraw) is an independent leaky bucket:
 
 - **`capacity`** — maximum total amount that can be pending at once.
 - **`rate`** — amount fulfilled per second (the drip rate).
-- **`lastDripTime`** — timestamp of the last drip. On any vault interaction, the bucket catches up: `fulfillable = min(rate * (now - lastDripTime), queueDepth)`.
+- **`lastDripTime`** — timestamp of the last completed catchup. On state-changing vault interactions, the bucket catches up: `fulfillable = min(rate * (now - lastDripTime), queueDepth)`. A drip call touches at most `MAX_DRIP_ENTRIES` entries; if the queue is longer, `lastDripTime` is not advanced and the budget carries over to the next call.
 - **Two-counter structure** — `head` and `tail` indices provide O(1) enqueue, O(1) dequeue, and O(1) position lookup.
 - **`queueDepth`** — total amount pending in the queue (`tail - head`).
 - Parameters are set by governance.
 
-No external keeper or epoch boundary is needed. The queue is always current — any read or write triggers lazy drip as a side effect.
+No external keeper or epoch boundary is needed. The queue is always current after any state-changing interaction — every transaction that touches the vault drips as a side effect, and `drip()` is permissionless. Views are pure reads and report the last persisted state (EVM views cannot mutate storage).
 
 ## 8.5 Rolling auction mechanism (English, v1)
 
 The auctioneer is pluggable (governance can swap the implementation). The v1 uses a conventional English ascending auction:
 
-- **Ascending bids** — each bid must exceed the current highest. Outbid funds are refunded immediately.
+- **Ascending bids (deposit) / descending bids (withdrawal)** — deposit bids must strictly exceed the current `maxPrice`; withdrawal bids must be strictly below the current `minPrice`, or equal to it with a strictly larger amount. Outbid funds are refunded immediately.
 - **Bid locking** — bidders lock ALCX (deposit) or vqALCX (withdrawal) in the auctioneer at bid time. Prevents griefing.
 - **Rolling rounds** — auction rounds overlap. When one settles, the next is already active.
 - **Capacity per round** — bounded by `rate * roundDuration`, drawn from the same leaky bucket as the queue. Queue and auction share the rate budget — queue gets it free, auction allocates to highest bidders. The rate limit is never bypassed.
@@ -749,7 +757,7 @@ These invariants define properties that must hold true across all states of the 
 | INV-Q-3 | Lazy drip processes at most `rate * (now - lastDripTime)` worth of requests per catchup | The drip rate per second is the upper bound on processing speed. |
 | INV-Q-4 | Queue ordering is FIFO — no position is fulfilled before an earlier position in the same queue | Guarantees fairness. |
 | INV-Q-5 | A user's fulfilled amount never exceeds their requested amount | Users get exactly what they asked for, never more. |
-| INV-Q-6 | `previewDeposit` and `previewRedeem` are faithful to actual execution results | What the preview returns is exactly what happens on execution. No slippage. |
+| INV-Q-6 | `previewDeposit` and `previewRedeem` are exact 1:1 conversions, and `deposit(maxDeposit(caller))` succeeds whenever `maxDeposit > 0` | Previews never misprice the 1:1 peg (no slippage); executability is signalled by `max*`, which quotes the largest single-request claimable for the claimant. |
 | INV-Q-7 | head <= tail always — head never exceeds tail | No underflow in queue indices. |
 | INV-Q-8 | Total queued deposit amount equals sum of all pending deposit requests | Internal accounting is consistent. |
 | INV-Q-9 | Queue cancellation removes the entry and charges the configured penalty — no free exits | Prevents queue spam. Penalties accrue above the watermark as protocol profit. |
@@ -793,7 +801,7 @@ These invariants define properties that must hold true across all states of the 
 
 | ID | Invariant | Notes |
 |----|-----------|-------|
-| INV-L-1 | Any vault view or state read reflects queue state current to `block.timestamp` | Lazy drip runs as a side effect of all vault interactions. No stale reads are possible. |
+| INV-L-1 | Every state-changing vault call drips before its effects; views report the last persisted drip state | Lazy drip runs as a side effect of all state-changing interactions. Views cannot drip (EVM purity) and are read as of the last transaction. |
 | INV-L-2 | Bucket drip math: `fulfillable = min(rate * (block.timestamp - lastDripTime), queueDepth)` | The drip is capped by the queue depth. No over-processing. |
 | INV-L-3 | lastDripTime <= block.timestamp always | Last drip time is never in the future. |
 | INV-L-4 | A position's maximum wait time in the queue is bounded by `queueDepth / rate` | No position's wait is unbounded. |
@@ -806,7 +814,7 @@ These invariants define properties that must hold true across all states of the 
 | ID | Risk | Severity | Mitigation |
 |----|------|----------|------------|
 | R-1 | **Vault insolvency from external losses** — if ALCX held by the vault is lost due to an exploit or catastrophic event, the vault's ALCX backing falls below the watermark. | High | Quality goal #2 states losses are shared equally — the watermark adjusts down. Since deposited ALCX sits in the vault (not deployed externally), the primary risk is a smart contract vulnerability in the vault itself. Emergency pause (via Gnosis Safe) can stop new deposits while the situation is assessed. |
-| R-2 | **Queue stagnation** — if nobody interacts with the vault for an extended period, lazy drip does not advance, and positions are never fulfilled. | Low | Any vault interaction triggers lazy drip. In practice, MEV bots monitor the vault and will trigger interactions to capture arbitrage opportunities. The queue also advances on reads (preview functions), not just writes. |
+| R-2 | **Queue stagnation** — if nobody transacts with the vault for an extended period, lazy drip does not persist, and positions are never fulfilled. | Low | Any state-changing vault interaction triggers lazy drip, and `drip()` is permissionless. In practice, MEV bots monitor the vault and will trigger interactions to capture arbitrage opportunities. |
 | R-3 | **ERC-4626 inflation attack** — an attacker front-runs the first deposit to manipulate share price, causing subsequent depositors to receive fewer shares than expected. | Low | Standard ERC-4626 mitigation: virtual shares/offsets, or a minimum deposit amount. The queue model itself provides additional protection — the first deposit does not mint shares immediately (it enters the queue), so there is no share price to manipulate at deposit time. |
 
 ## 11.2 Technical debt

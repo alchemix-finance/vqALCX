@@ -34,11 +34,10 @@ contract VqAuctionerTest is Test {
 
         auctioner = new VqAuctioner(address(alcx), address(vault), treasury, ROUND_DURATION);
 
-        // Set auctioneer on vault via two-step transfer
+        // Set auctioneer on vault via two-step transfer (real acceptance path)
         vm.prank(governance);
         vault.proposeAuctioneer(address(auctioner));
-        vm.prank(address(auctioner));
-        vault.acceptAuctioneer();
+        auctioner.acceptVaultAuctioneer();
 
         // Set bucket params
         vm.prank(governance);
@@ -67,8 +66,7 @@ contract VqAuctionerTest is Test {
         auctioner2 = new VqAuctioner(address(alcx2), address(vault2), treasury, 100);
         vm.prank(governance);
         vault2.proposeAuctioneer(address(auctioner2));
-        vm.prank(address(auctioner2));
-        vault2.acceptAuctioneer();
+        auctioner2.acceptVaultAuctioneer();
         vm.prank(governance);
         vault2.setDepositBucketParams(10e18, 10_000e18);
         vm.prank(governance);

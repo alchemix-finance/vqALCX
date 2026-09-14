@@ -238,8 +238,8 @@ contract CrossContractInvariantTest is StdInvariant, Test {
 
         vm.prank(governance);
         vault.proposeAuctioneer(address(auctioner));
-        vm.prank(address(auctioner));
-        vault.acceptAuctioneer();
+        // Real activation path — no impersonation of the contract.
+        auctioner.acceptVaultAuctioneer();
 
         vm.startPrank(governance);
         vault.setDepositBucketParams(50e18, 1_000_000e18);

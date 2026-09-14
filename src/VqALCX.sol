@@ -42,6 +42,12 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     uint256 public constant MAX_BPS = 10000;
     uint256 public cancellationPenaltyBps = 100;
 
+    /// @notice Maximum queue entries one drip may touch. Each drip call processes at most this
+    /// many entries; if the queue is longer, the remaining fulfillment budget stays unclaimed
+    /// (lastDripTime is not advanced) and continues on the next call. Bounds drip gas so dust
+    /// spam can never brick the vault.
+    uint256 public constant MAX_DRIP_ENTRIES = 100;
+
     bool public paused;
 
     Bucket public depositBucket;
@@ -115,13 +121,20 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (elapsed == 0) return;
 
         uint256 fulfillable = b.rate * elapsed;
-        b.lastDripTime = block.timestamp;
+        uint256 processed;
 
         while (fulfillable > 0 && b.head < b.tail) {
+            if (processed == MAX_DRIP_ENTRIES) {
+                // Queue longer than one call's budget: keep lastDripTime so the
+                // unspent fulfillment budget continues on the next drip instead of
+                // leaking to auction capacity ahead of queued requests.
+                return;
+            }
             Request storage req = depositRequests[b.head];
             uint256 remaining = req.amount - req.filled;
             if (req.cancelled || remaining == 0) {
                 b.head++;
+                processed++;
                 continue;
             }
             uint256 take = remaining > fulfillable ? fulfillable : remaining;
@@ -131,9 +144,12 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
             if (req.filled == req.amount) {
                 b.head++;
             }
+            processed++;
         }
 
-        // remaining fulfillable is available for auctions
+        // Queue fully caught up (or budget exhausted): consume the time,
+        // leftover fulfillable is available for auctions.
+        b.lastDripTime = block.timestamp;
         b.availableAuctionCapacity += fulfillable;
     }
 
@@ -143,13 +159,17 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (elapsed == 0) return;
 
         uint256 fulfillable = b.rate * elapsed;
-        b.lastDripTime = block.timestamp;
+        uint256 processed;
 
         while (fulfillable > 0 && b.head < b.tail) {
+            if (processed == MAX_DRIP_ENTRIES) {
+                return;
+            }
             Request storage req = withdrawRequests[b.head];
             uint256 remaining = req.amount - req.filled;
             if (req.cancelled || remaining == 0) {
                 b.head++;
+                processed++;
                 continue;
             }
             uint256 take = remaining > fulfillable ? fulfillable : remaining;
@@ -159,8 +179,10 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
             if (req.filled == req.amount) {
                 b.head++;
             }
+            processed++;
         }
 
+        b.lastDripTime = block.timestamp;
         b.availableAuctionCapacity += fulfillable;
     }
 
@@ -204,6 +226,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function cancelDepositRequest(uint256 requestId) external nonReentrant {
+        _dripDepositBucket();
         Request storage req = depositRequests[requestId];
         if (req.owner != msg.sender) revert NotRequestOwner();
         if (req.cancelled) revert AlreadyCancelled();
@@ -223,6 +246,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function cancelWithdrawRequest(uint256 requestId) external nonReentrant {
+        _dripWithdrawBucket();
         Request storage req = withdrawRequests[requestId];
         if (req.owner != msg.sender) revert NotRequestOwner();
         if (req.cancelled) revert AlreadyCancelled();
@@ -257,7 +281,10 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function maxDeposit(address) public view returns (uint256) {
-        return _getFulfillableDepositAmount(msg.sender);
+        // Quoted for msg.sender: deposit()/mint() claim from the caller's requests,
+        // so the largest amount a single claim can execute is the caller's largest
+        // single-request claimable (aggregating requests would overstate it).
+        return _getLargestClaimableDeposit(msg.sender);
     }
 
     function previewDeposit(uint256 assets) public pure returns (uint256) {
@@ -299,7 +326,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function maxWithdraw(address owner) public view returns (uint256) {
-        return _getFulfillableWithdrawAmount(owner);
+        return _getLargestClaimableWithdraw(owner);
     }
 
     function previewWithdraw(uint256 assets) public pure returns (uint256) {
@@ -382,22 +409,24 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         return (false, 0);
     }
 
-    function _getFulfillableDepositAmount(address owner) internal view returns (uint256 total) {
+    function _getLargestClaimableDeposit(address owner) internal view returns (uint256 largest) {
         uint256[] memory ids = depositRequestIds[owner];
         for (uint256 i = 0; i < ids.length; i++) {
             Request storage req = depositRequests[ids[i]];
-            if (req.filled > req.claimed) {
-                total += req.filled - req.claimed;
+            uint256 claimable = req.filled - req.claimed;
+            if (claimable > largest) {
+                largest = claimable;
             }
         }
     }
 
-    function _getFulfillableWithdrawAmount(address owner) internal view returns (uint256 total) {
+    function _getLargestClaimableWithdraw(address owner) internal view returns (uint256 largest) {
         uint256[] memory ids = withdrawRequestIds[owner];
         for (uint256 i = 0; i < ids.length; i++) {
             Request storage req = withdrawRequests[ids[i]];
-            if (req.filled > req.claimed) {
-                total += req.filled - req.claimed;
+            uint256 claimable = req.filled - req.claimed;
+            if (claimable > largest) {
+                largest = claimable;
             }
         }
     }
@@ -433,6 +462,12 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (rate == 0) revert InvalidBucketParams();
         _dripDepositBucket();
         if (capacity < depositBucket.pendingAmount) revert InvalidBucketParams();
+        if (rate != depositBucket.rate && depositBucket.rate != 0) {
+            // Auction credit is denominated in rate-seconds: rebase it when the rate
+            // changes so accumulated credit cannot outlive a governance rate cut.
+            depositBucket.availableAuctionCapacity =
+                (depositBucket.availableAuctionCapacity * rate) / depositBucket.rate;
+        }
         depositBucket.rate = rate;
         depositBucket.capacity = capacity;
         emit BucketParamsUpdated(true, rate, capacity);
@@ -442,6 +477,10 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (rate == 0) revert InvalidBucketParams();
         _dripWithdrawBucket();
         if (capacity < withdrawBucket.pendingAmount) revert InvalidBucketParams();
+        if (rate != withdrawBucket.rate && withdrawBucket.rate != 0) {
+            withdrawBucket.availableAuctionCapacity =
+                (withdrawBucket.availableAuctionCapacity * rate) / withdrawBucket.rate;
+        }
         withdrawBucket.rate = rate;
         withdrawBucket.capacity = capacity;
         emit BucketParamsUpdated(false, rate, capacity);

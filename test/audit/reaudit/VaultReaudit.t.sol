@@ -13,7 +13,7 @@ contract MockALCX is ERC20 {
 }
 
 /// @title Re-audit validation tests for the VqALCX vault and VqAuctioner
-/// @notice Each test validates one suspected finding from the 2026-09-08 re-audit.
+/// @notice Regression tests for vault and auctioner audit remediations.
 contract VaultReauditTest is Test {
     VqALCX internal vault;
     VqAuctioner internal auctioner;
@@ -21,6 +21,7 @@ contract VaultReauditTest is Test {
 
     address internal governance = address(0xCAFE);
     address internal alice = address(0x1111);
+    address internal bob = address(0x2222);
 
     uint256 internal constant RATE = 100e18;
     uint256 internal constant CAPACITY = 100_000_000e18;
@@ -32,8 +33,9 @@ contract VaultReauditTest is Test {
 
         vm.prank(governance);
         vault.proposeAuctioneer(address(auctioner));
-        vm.prank(address(auctioner));
-        vault.acceptAuctioneer();
+        // Real activation path: the auctioneer accepts through its own entry
+        // point — no vm.prank impersonation of the contract.
+        auctioner.acceptVaultAuctioneer();
 
         vm.startPrank(governance);
         vault.setDepositBucketParams(RATE, CAPACITY);
@@ -57,10 +59,10 @@ contract VaultReauditTest is Test {
     }
 
     // ------------------------------------------------------------------
-    // F-1 (HIGH): drip gas scales linearly with the number of pending
-    // requests. Dust-request spam pushes drip past the block gas limit,
-    // permanently reverting every drip-calling entry point (requests,
-    // claims, drip, and both setBucketParams functions).
+    // Drip work is bounded to MAX_DRIP_ENTRIES per call
+    // and unspent fulfillment budget carries over (lastDripTime is only
+    // advanced once the queue is caught up), so dust spam can never brick
+    // the vault — repeated drip calls always make progress.
     // ------------------------------------------------------------------
 
     function _spamDepositRequests(address who, uint256 n) internal {
@@ -71,70 +73,90 @@ contract VaultReauditTest is Test {
         vm.stopPrank();
     }
 
-    function test_F1_DripGasScaling_1000() public {
-        _spamDepositRequests(alice, 1000);
-        vm.warp(block.timestamp + 100);
-        uint256 g0 = gasleft();
-        vault.drip();
-        uint256 used = g0 - gasleft();
-        emit log_named_uint("drip gas, 1000 dust requests", used);
-        assertGt(used, 1_000_000);
-    }
-
-    function test_F1_DripGasScaling_4000() public {
+    function test_DripGasIsBounded() public {
         _spamDepositRequests(alice, 4000);
         vm.warp(block.timestamp + 100);
         uint256 g0 = gasleft();
         vault.drip();
         uint256 used = g0 - gasleft();
-        emit log_named_uint("drip gas, 4000 dust requests", used);
-        // ~linear scaling vs the 1000-request measurement; already above
-        // any realistic block-gas headroom, so the vault is bricked.
-        assertGt(used, 20_000_000);
+        emit log_named_uint("drip gas, 4000 dust requests (bounded)", used);
+        // One call touches at most MAX_DRIP_ENTRIES (100) entries regardless
+        // of queue length: gas stays far below any block gas limit.
+        assertLt(used, 3_500_000);
+    }
+
+    function test_DripBudgetCarriesOverUntilQueueCaughtUp() public {
+        _spamDepositRequests(alice, 250);
+        vm.warp(block.timestamp + 100);
+
+        // 250 entries > 100 per call: three drips walk the whole queue,
+        // and the time bucket is only consumed once it is drained.
+        vault.drip();
+        assertGt(vault.depositQueueDepth(), 0, "queue not fully drained in one call");
+        vault.drip();
+        assertGt(vault.depositQueueDepth(), 0, "queue not fully drained in two calls");
+        vault.drip();
+        assertEq(vault.depositQueueDepth(), 0, "queue drained after three calls");
+
+        // Budget did not leak to auctions while queued dust was pending…
+        uint256 midCredit = vault.depositAuctionCapacity();
+        // …and once caught up, residual credit accrues normally.
+        vm.warp(block.timestamp + 10);
+        vault.drip();
+        assertGt(vault.depositAuctionCapacity(), midCredit + RATE * 10 - 2);
+
+        // Claims work again after spam: vault is not bricked.
+        vm.prank(alice);
+        uint256 max = vault.maxDeposit(alice);
+        assertEq(max, 1, "largest single dust claimable");
+        vm.prank(alice);
+        vault.deposit(1, alice);
+        assertEq(vault.balanceOf(alice), 1);
     }
 
     // ------------------------------------------------------------------
-    // F-3 (MEDIUM, integrator impact): maxDeposit sums claimable across
-    // all of a user's requests, but deposit()/mint() can only claim from
-    // a single request. deposit() reverts at maxDeposit.
+    // maxDeposit quotes the largest single-request
+    // claimable, so deposit(maxDeposit()) always succeeds even when the
+    // claimable spans multiple requests.
     // ------------------------------------------------------------------
 
-    function test_F3_MaxDepositOverreports() public {
+    function test_MaxDepositQuotesExecutableAmount() public {
         vm.startPrank(alice);
         vault.requestDeposit(60e18);
         vault.requestDeposit(40e18);
         vm.warp(block.timestamp + 10);
         vm.stopPrank();
 
-        // Views do not project elapsed drip: maxDeposit reports zero even
-        // though 1000e18 of fulfillment has elapsed since the requests.
+        // Views do not project elapsed drip (documented: views are pure reads).
         vm.prank(alice);
         assertEq(vault.maxDeposit(alice), 0, "view does not project elapsed drip");
 
         vault.drip();
 
-        // The receiver argument is ignored: read from an uninvolved caller,
-        // maxDeposit(alice) reports the caller's claimable (zero).
-        assertEq(vault.maxDeposit(alice), 0, "receiver parameter is ignored");
+        // Quoted for the caller (the claimant), not the receiver argument.
+        assertEq(vault.maxDeposit(alice), 0, "quoted for msg.sender, uninvolved caller");
 
-        // Read as alice: maxDeposit sums claimable across ALL requests,
-        // but deposit() can only claim from a single request.
-        vm.prank(alice);
+        // Largest single request is 60e18 — deposit(maxDeposit) must succeed.
+        vm.startPrank(alice);
         uint256 max = vault.maxDeposit(alice);
-        assertEq(max, 100e18);
-        vm.prank(alice);
-        vm.expectRevert(VqALCX.RequestNotFulfillable.selector);
-        vault.deposit(100e18, alice);
+        assertEq(max, 60e18);
+        vault.deposit(max, alice);
+        assertEq(vault.balanceOf(alice), 60e18);
+
+        // Then the second request becomes quotable and executable.
+        assertEq(vault.maxDeposit(alice), 40e18);
+        vault.deposit(40e18, alice);
+        assertEq(vault.balanceOf(alice), 100e18);
+        vm.stopPrank();
     }
 
     // ------------------------------------------------------------------
-    // F-4 (MEDIUM, spec non-conformance): previews are pure 1:1
-    // identities and do not reflect queue state, contradicting arch.md
-    // sections 4.1 and 8.1. ERC-4626 integrators will expect success
-    // where deposit() reverts.
+    // Previews are pure 1:1 conversions and
+    // views do not advance the queue — EVM views cannot mutate state. The
+    // spec (arch.md) documents this; executability is signalled by max*.
     // ------------------------------------------------------------------
 
-    function test_F4_PreviewDoesNotReflectQueue() public {
+    function test_PreviewDoesNotReflectQueue() public {
         assertEq(vault.previewDeposit(50e18), 50e18);
         assertEq(vault.previewWithdraw(50e18), 50e18);
         vm.prank(alice);
@@ -143,13 +165,14 @@ contract VaultReauditTest is Test {
     }
 
     // ------------------------------------------------------------------
-    // F-2 (MEDIUM): replacing the auctioneer while bids are locked
-    // permanently strands the escrow: the old auctioner can no longer
-    // settle (vault reverts NotAuctioneer) and VqAuctioner exposes no
-    // entry point that could re-accept authorization.
+    // Replacing the auctioneer still blocks the old
+    // instance from settling (NotAuctioneer), but escrow is no longer
+    // stranded: governance re-proposes the old instance and its
+    // acceptVaultAuctioneer() entry point completes the re-authorization,
+    // after which settlement releases the escrow.
     // ------------------------------------------------------------------
 
-    function test_F2_AuctioneerReplacementStrandsDepositEscrow() public {
+    function test_AuctioneerReplacementRecoversDepositEscrow() public {
         _giveAliceVqALCX(2000e18);
         vm.prank(alice);
         auctioner.bidDeposit(2000e18, 2100e18);
@@ -167,10 +190,21 @@ contract VaultReauditTest is Test {
         uint256 r = auctioner.currentDepositRound();
         vm.expectRevert(VqALCX.NotAuctioneer.selector);
         auctioner.settleDepositRound(r);
-        assertEq(alcx.balanceOf(address(auctioner)), 2100e18, "escrow stranded");
+
+        // Recovery: re-propose the old instance; anyone can trigger its
+        // acceptance through the real entry point.
+        vm.prank(governance);
+        vault.proposeAuctioneer(address(auctioner));
+        auctioner.acceptVaultAuctioneer();
+        assertEq(vault.authorizedAuctioneer(), address(auctioner));
+
+        uint256 aliceVqBefore = vault.balanceOf(alice);
+        auctioner.settleDepositRound(r);
+        assertEq(alcx.balanceOf(address(auctioner)), 0, "escrow released");
+        assertGt(vault.balanceOf(alice), aliceVqBefore, "winner minted");
     }
 
-    function test_F2_AuctioneerReplacementStrandsWithdrawEscrow() public {
+    function test_AuctioneerReplacementRecoversWithdrawEscrow() public {
         _giveAliceVqALCX(4000e18);
         vm.startPrank(alice);
         vault.requestWithdraw(2000e18);
@@ -192,49 +226,59 @@ contract VaultReauditTest is Test {
         uint256 r = auctioner.currentWithdrawRound();
         vm.expectRevert(VqALCX.NotAuctioneer.selector);
         auctioner.settleWithdrawRound(r);
-        assertEq(vault.balanceOf(address(auctioner)), 2000e18, "share escrow stranded");
+
+        vm.prank(governance);
+        vault.proposeAuctioneer(address(auctioner));
+        auctioner.acceptVaultAuctioneer();
+
+        uint256 aliceAlcxBefore = alcx.balanceOf(alice);
+        auctioner.settleWithdrawRound(r);
+        assertEq(vault.balanceOf(address(auctioner)), 0, "escrow released");
+        assertEq(alcx.balanceOf(alice), aliceAlcxBefore + 1900e18, "winner paid");
     }
 
     // ------------------------------------------------------------------
-    // F-8 (LOW, economic): auction credit accumulates without cap or
-    // expiry and survives a governance rate reduction, so a large
-    // stockpile can fund a single oversized instant mint later.
+    // Auction credit is rebased when governance changes
+    // the rate, so accumulated credit cannot outlive a rate cut.
     // ------------------------------------------------------------------
 
-    function test_F8_AuctionCreditSurvivesRateCut() public {
+    function test_AuctionCreditRebasesOnRateCut() public {
         vm.warp(block.timestamp + 100);
         vm.prank(governance);
         vault.drip();
-        assertGe(vault.depositAuctionCapacity(), 10_000e18);
+        uint256 creditBefore = vault.depositAuctionCapacity();
+        assertGe(creditBefore, 10_000e18);
 
+        // Cut the rate 100x: credit is rebased to the new rate's denomination.
         vm.prank(governance);
         vault.setDepositBucketParams(1e18, CAPACITY);
+        uint256 rebased = vault.depositAuctionCapacity();
+        assertEq(rebased, creditBefore / 100, "credit rebased by rate ratio");
+
         vm.warp(block.timestamp + 10);
         vm.prank(governance);
         vault.drip();
-        assertGe(vault.depositAuctionCapacity(), 10_000e18, "credit survives rate cut");
+        assertEq(vault.depositAuctionCapacity(), rebased + 10e18, "new credit accrues at new rate");
     }
 
     // ------------------------------------------------------------------
-    // Regression confirmation: after a partial fill plus cancellation,
-    // the filled portion stays claimable and the refund is exact.
+    // Cancellation drips first, so the refund reflects the
+    // fulfillment persisted up to block.timestamp without a manual drip,
+    // and the filled portion stays claimable afterwards.
     // ------------------------------------------------------------------
 
-    function test_PartialFillClaimableAfterCancel() public {
+    function test_CancelPersistsElapsedDrip() public {
         uint256 bal0 = alcx.balanceOf(alice);
         vm.startPrank(alice);
         vault.requestDeposit(1000e18);
-        vm.warp(block.timestamp + 1);
+        vm.warp(block.timestamp + 1); // 1s * RATE = 100e18 filled
         vm.stopPrank();
 
-        // cancelDepositRequest does not drip first: the fulfillment that
-        // elapsed since the request is not persisted before computing the
-        // refund. Persist it explicitly, then cancel the remainder.
-        vault.drip();
+        // No manual drip: cancel itself persists the elapsed fulfillment.
         vm.prank(alice);
-        vault.cancelDepositRequest(0); // refunds 900e18 minus 1% penalty
+        vault.cancelDepositRequest(0); // refunds 900e18 minus 1% penalty = 891e18
         vm.prank(alice);
-        vault.deposit(100e18, alice);
+        vault.deposit(100e18, alice); // filled portion still claimable
 
         assertEq(vault.balanceOf(alice), 100e18);
         // alice: -1000 escrow at request, +891 refund; the remaining 100e18
@@ -281,5 +325,69 @@ contract VaultReauditTest is Test {
         vm.warp(endTime);
         auctioner.settleWithdrawRound(auctioner.currentWithdrawRound());
         assertEq(alcx.balanceOf(alice), 1_000_000e18 - 2000e18 + 1000e18, "burn auction open under pause");
+    }
+
+    // ------------------------------------------------------------------
+    // Floor-price withdrawal bids remain replaceable. A
+    // strictly lower price always outbids; at equal price a strictly
+    // larger amount outbids, so a zero-price dust bid can no longer
+    // monopolize a round.
+    // ------------------------------------------------------------------
+
+    function test_FloorPriceWithdrawBidIsReplaceable() public {
+        _giveAliceVqALCX(4_000e18);
+        _giveAliceVqALCX(4_000e18);
+        vm.startPrank(alice);
+        vault.transfer(bob, 4_000e18);
+        vm.stopPrank();
+        vm.prank(bob);
+        vault.approve(address(auctioner), type(uint256).max);
+
+        // Strictly lower price replaces a positive-price leader (unchanged).
+        vm.prank(bob);
+        auctioner.bidWithdraw(3_000e18, 1_000e18);
+        vm.prank(alice);
+        auctioner.bidWithdraw(3_000e18, 999e18);
+        (,,,,,,, address bidder,,) = auctioner.withdrawRounds(auctioner.currentWithdrawRound());
+        assertEq(bidder, alice, "lower price replaces");
+
+        // Settle to open a fresh round.
+        (,,, uint256 endTime,,,,,,) = auctioner.withdrawRounds(auctioner.currentWithdrawRound());
+        vm.warp(endTime);
+        auctioner.settleWithdrawRound(auctioner.currentWithdrawRound());
+
+        // alice locks the fresh round with a dust bid at the uint floor price.
+        vm.prank(alice);
+        auctioner.bidWithdraw(1, 0);
+
+        // Equal price + strictly larger amount replaces the floor bid.
+        vm.prank(bob);
+        auctioner.bidWithdraw(4_000e18, 0);
+        (,,,,,,, bidder,,) = auctioner.withdrawRounds(auctioner.currentWithdrawRound());
+        assertEq(bidder, bob, "equal price + larger amount replaces floor-price dust bid");
+
+        // Equal price with equal-or-smaller amount still reverts.
+        vm.prank(alice);
+        vm.expectRevert(VqAuctioner.BidTooLow.selector);
+        auctioner.bidWithdraw(4_000e18, 0);
+        vm.prank(alice);
+        vm.expectRevert(VqAuctioner.BidTooLow.selector);
+        auctioner.bidWithdraw(3_000e18, 0);
+    }
+
+    // ------------------------------------------------------------------
+    // The auctioneer constructor rejects zero addresses
+    // and a zero round duration.
+    // ------------------------------------------------------------------
+
+    function test_AuctionerConstructorRejectsInvalidParams() public {
+        vm.expectRevert(VqAuctioner.InvalidConstructorParams.selector);
+        new VqAuctioner(address(0), address(vault), address(0xA11CE), 1 hours);
+        vm.expectRevert(VqAuctioner.InvalidConstructorParams.selector);
+        new VqAuctioner(address(alcx), address(0), address(0xA11CE), 1 hours);
+        vm.expectRevert(VqAuctioner.InvalidConstructorParams.selector);
+        new VqAuctioner(address(alcx), address(vault), address(0), 1 hours);
+        vm.expectRevert(VqAuctioner.InvalidConstructorParams.selector);
+        new VqAuctioner(address(alcx), address(vault), address(0xA11CE), 0);
     }
 }

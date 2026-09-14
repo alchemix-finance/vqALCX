@@ -18,7 +18,7 @@ contract MockReward is ERC20 {
     }
 }
 
-/// @title Re-audit validation tests for VqStaking
+/// @title Regression tests for VqStaking audit remediations
 contract StakingReauditTest is Test {
     VqALCX internal vault;
     VqStaking internal staking;
@@ -63,28 +63,22 @@ contract StakingReauditTest is Test {
     }
 
     // ------------------------------------------------------------------
-    // F-INT-1 (LOW, integration): CLOCK_MODE() returns the nonstandard
-    // string "mode=blockstamp". ERC-6372 canonical timestamp clocks
-    // return "mode=timestamp" (see OZ ERC6372Utils.timestampClockMode).
-    // Consumers that validate the mode string will reject the contract.
+    // CLOCK_MODE() returns the ERC-6372 canonical
+    // timestamp descriptor "mode=timestamp" (OZ ERC6372Utils).
     // ------------------------------------------------------------------
 
-    function test_FINT1_ClockModeStringNonstandard() public view {
+    function test_ClockModeStringCanonical() public view {
         assertEq(staking.clock(), block.timestamp);
-        assertEq(staking.CLOCK_MODE(), "mode=blockstamp");
-        assertTrue(
-            keccak256(bytes(staking.CLOCK_MODE())) != keccak256(bytes("mode=timestamp")),
-            "mode string is not the ERC-6372 canonical timestamp mode"
-        );
+        assertEq(staking.CLOCK_MODE(), "mode=timestamp");
     }
 
     // ------------------------------------------------------------------
-    // F-STAKE-1 (LOW, design): reward tokens donated while no one has
+    // Reward tokens donated while no one has
     // staked are never distributed then, and accrue in full to the
     // first staker once anyone stakes.
     // ------------------------------------------------------------------
 
-    function test_FSTAKE1_PreStakeDonationsGoToFirstStaker() public {
+    function test_PreStakeDonationsGoToFirstStaker() public {
         reward.transfer(address(staking), 1000e18);
 
         _stakeAs(alice, 1000e18);
@@ -94,11 +88,11 @@ contract StakingReauditTest is Test {
     }
 
     // ------------------------------------------------------------------
-    // F-STAKE-2 (INFO): earned() does not include unaccrued funding;
+    // earned() does not include unaccrued funding;
     // it only moves after someone triggers accrueRewards().
     // ------------------------------------------------------------------
 
-    function test_FSTAKE2_EarnedStaleUntilAccrual() public {
+    function test_EarnedStaleUntilAccrual() public {
         _stakeAs(alice, 1000e18);
         staking.accrueRewards();
 
@@ -110,26 +104,22 @@ contract StakingReauditTest is Test {
     }
 
     // ------------------------------------------------------------------
-    // Voting integration: undelegated stakers hold zero votes (standard
-    // OZ Votes semantics, delegates() has no self-default), but
-    // balance checkpoints are kept regardless, so getPastBalanceOf
-    // works for Aragon-style delegate override.
+    // First stake defaults to self-delegation, so voting
+    // power is live immediately; balance checkpoints are kept regardless
+    // (Aragon-style delegate override reads getPastBalanceOf).
     // ------------------------------------------------------------------
 
-    function test_UndelegatedStakerHasZeroVotesButBalanceCheckpoints() public {
+    function test_StakeAutoSelfDelegatesWithBalanceCheckpoints() public {
         _stakeAs(alice, 1000e18);
-        assertEq(staking.getVotes(alice), 0, "undelegated stake carries no votes");
+        assertEq(staking.getVotes(alice), 1000e18, "stake auto-self-delegates");
+        assertEq(staking.delegates(alice), alice);
         assertEq(staking.stakedBalanceOf(alice), 1000e18);
 
         vm.warp(block.timestamp + 12);
         uint48 ts = uint48(block.timestamp - 1);
 
         assertEq(staking.getPastBalanceOf(alice, ts), 1000e18, "balance checkpoint kept");
-        assertEq(staking.getPastVotes(alice, ts), 0, "delegate checkpoint empty");
-
-        vm.prank(alice);
-        staking.delegate(alice);
-        assertEq(staking.getVotes(alice), 1000e18, "self-delegation activates votes");
+        assertEq(staking.getPastVotes(alice, ts), 1000e18, "votes checkpointed");
     }
 
     // ------------------------------------------------------------------

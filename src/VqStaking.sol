@@ -67,7 +67,8 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
 
     // solhint-disable-next-line func-name-mixedcase
     function CLOCK_MODE() public view virtual override returns (string memory) {
-        return "mode=blockstamp";
+        // ERC-6372 canonical descriptor for a block.timestamp clock
+        return "mode=timestamp";
     }
 
     // ------------------------------------------------------------------------
@@ -115,6 +116,13 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
         _totalStaked += amount;
 
         _transferVotingUnits(address(0), msg.sender, amount);
+
+        // Staked-but-undelegated accounts hold zero votes in OZ Votes. Default to
+        // self-delegation on first stake so voting power is live without a separate
+        // delegate() call; explicit prior delegations are preserved.
+        if (delegates(msg.sender) == address(0)) {
+            _delegate(msg.sender, msg.sender);
+        }
 
         emit Staked(msg.sender, amount);
     }

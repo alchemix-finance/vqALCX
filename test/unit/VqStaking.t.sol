@@ -79,7 +79,8 @@ contract VqStakingTest is Test {
         assertEq(address(staking.vqALCX()), address(vault));
         assertEq(address(staking.rewardToken()), address(rewardToken));
         assertEq(staking.clock(), block.timestamp);
-        assertEq(staking.CLOCK_MODE(), "mode=blockstamp");
+        // ERC-6372 canonical descriptor for a timestamp clock
+        assertEq(staking.CLOCK_MODE(), "mode=timestamp");
     }
 
     function test_ConstructorRejectsStakedTokenAsRewardToken() public {
@@ -128,13 +129,15 @@ contract VqStakingTest is Test {
     // Voting power (VotesExtended)
     // ------------------------------------------------------------------
 
-    function test_GetVotesBeforeDelegate() public {
+    function test_StakeAutoSelfDelegates() public {
         _depositVqALCX(alice, 1000e18);
 
         vm.prank(alice);
         staking.stake(1000e18);
 
-        assertEq(staking.getVotes(alice), 0);
+        // First stake defaults to self-delegation, votes are live
+        assertEq(staking.delegates(alice), alice);
+        assertEq(staking.getVotes(alice), 1000e18);
     }
 
     function test_DelegateSelf() public {
