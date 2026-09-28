@@ -196,6 +196,28 @@ contract VqStakingTest is Test {
         assertEq(staking.getPastDelegate(alice, snapshotTime), delegate1);
     }
 
+    function test_CurrentTimeViews() public {
+        _depositVqALCX(alice, 1000e18);
+        _depositVqALCX(bob, 500e18);
+
+        vm.prank(alice);
+        staking.stake(1000e18);
+        vm.prank(bob);
+        staking.stake(500e18);
+        vm.warp(block.timestamp + 100);
+
+        vm.prank(alice);
+        staking.unstake(400e18);
+
+        assertEq(staking.balanceOf(alice), 600e18);
+        assertEq(staking.balanceOf(bob), 500e18);
+        assertEq(staking.getTotalSupply(), 1100e18);
+
+        assertEq(staking.name(), vault.name());
+        assertEq(staking.symbol(), vault.symbol());
+        assertEq(staking.decimals(), vault.decimals());
+    }
+
     // ------------------------------------------------------------------
     // Checkpoint on stake/unstake
     // ------------------------------------------------------------------

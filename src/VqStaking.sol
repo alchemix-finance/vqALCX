@@ -2,6 +2,7 @@
 pragma solidity 0.8.36;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {VotesExtended} from "@openzeppelin/contracts/governance/utils/VotesExtended.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
@@ -15,8 +16,9 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 ///         and the balance delta is lazily accrued into rewardPerShare.
 contract VqStaking is VotesExtended, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20Metadata;
 
-    IERC20 public immutable vqALCX;
+    IERC20Metadata public immutable vqALCX;
     IERC20 public immutable rewardToken;
 
     /// @notice Newly staked balances earn no rewards for this long (anti-sniping):
@@ -52,7 +54,7 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
 
     constructor(address _vqALCX, address _rewardToken) EIP712("VqStaking", "1") {
         if (_vqALCX == _rewardToken) revert SameRewardToken();
-        vqALCX = IERC20(_vqALCX);
+        vqALCX = IERC20Metadata(_vqALCX);
         rewardToken = IERC20(_rewardToken);
     }
 
@@ -158,6 +160,28 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
 
     function totalStaked() external view returns (uint256) {
         return _totalStaked + _totalWarming;
+    }
+
+
+    function balanceOf(address account) external view returns (uint256) {
+        return _getVotingUnits(account);
+    }
+
+
+    function getTotalSupply() external view returns (uint256) {
+        return _getTotalSupply();
+    }
+
+    function name() external view returns (string memory) {
+        return vqALCX.name();
+    }
+
+    function symbol() external view returns (string memory) {
+        return vqALCX.symbol();
+    }
+
+    function decimals() external view returns (uint8) {
+        return vqALCX.decimals();
     }
 
     function earned(address account) external view returns (uint256) {
