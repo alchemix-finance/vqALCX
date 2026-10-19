@@ -439,9 +439,10 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
 
         _burn(authorizedAuctioneer, burnAmount);
         protocolRevenue += burnAmount - payoutAmount; // discount stays in the vault
-        _asset.safeTransfer(winner, _scaled(payoutAmount));
+        uint256 payout = _scaled(payoutAmount);
+        _asset.safeTransfer(winner, payout);
         emit AuctionBurnExecuted(winner, burnAmount);
-        emit Withdraw(msg.sender, winner, authorizedAuctioneer, burnAmount, payoutAmount);
+        emit Withdraw(msg.sender, winner, authorizedAuctioneer, payout, burnAmount);
     }
 
     function setDepositBucketParams(uint256 rate, uint256 capacity) external onlyGovernance {
