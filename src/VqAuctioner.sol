@@ -15,6 +15,7 @@ interface IVqALCX {
     function drip() external;
     function depositAuctionCapacity() external view returns (uint256);
     function withdrawAuctionCapacity() external view returns (uint256);
+    function authorizedAuctioneer() external view returns (address);
     function acceptAuctioneer() external;
     function paused() external view returns (bool);
 }
@@ -213,11 +214,8 @@ contract VqAuctioner is ReentrancyGuard {
         uint256 available = vault.depositAuctionCapacity();
         if (fill > available) fill = available;
 
-        if (fill > 0 && vault.paused()) {
-            // Pause gates minting in the vault; the winner's locked bid must not be
-            // stranded. Settle the round empty and make the winner whole (principal,
-            // no fill -> no premium). Competition resumes after unpause.
-            alcx.safeTransfer(winner, clearingPrice);
+        if (fill > 0 && (vault.paused() || vault.authorizedAuctioneer() != address(this))) {
+             alcx.safeTransfer(winner, clearingPrice);
             emit DepositRoundSettled(roundId, winner, 0, clearingPrice);
             _startDepositRound();
             return;
@@ -265,6 +263,15 @@ contract VqAuctioner is ReentrancyGuard {
         uint256 fill = bidAmount;
         uint256 available = vault.withdrawAuctionCapacity();
         if (fill > available) fill = available;
+
+        if (fill > 0 && vault.authorizedAuctioneer() != address(this)) {
+            // Rotation gates burning in the vault; refund the full escrow, settle empty.
+            vqALCX.safeTransfer(winner, bidAmount);
+            round.totalFilled = 0;
+            emit WithdrawRoundSettled(roundId, winner, 0, clearingPrice);
+            _startWithdrawRound();
+            return;
+        }
 
         uint256 payout = (clearingPrice * fill) / bidAmount;
         uint256 refundAmount = bidAmount - fill;

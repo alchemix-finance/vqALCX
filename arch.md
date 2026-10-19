@@ -251,7 +251,7 @@ Everything at or below the watermark is user principal, backed 1:1 by ALCX. Ever
 
 ## 4.3 Pluggable components and access control
 
-Auction contracts are replaceable by governance without modifying the core vault. The vault holds an `authorizedAuctioneer` address that can be swapped. The staking contract is also replaceable — swapping DAO frameworks requires deploying a new staking contract, not touching the vault.
+Auction contracts are replaceable by governance without modifying the core vault. The vault holds an `authorizedAuctioneer` address that can be swapped. If the retiring auctioneer still has an expired unsettled round, anyone may settle it: the settle path detects it no longer holds vault authorization, refunds the winner's full escrow, and settles the round empty — rotation never strands bid escrow. The staking contract is also replaceable — swapping DAO frameworks requires deploying a new staking contract, not touching the vault.
 
 **`governanceAddress` lifecycle:**
 - **Initial deployment:** `governanceAddress` is set to a Gnosis Safe (OC-2) for initial configuration and emergency actions.

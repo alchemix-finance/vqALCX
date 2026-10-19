@@ -574,8 +574,74 @@ contract VqAuctionerTest is Test {
         assertEq(round.highestBidPrice, 900e18);
 
         // equal discount keeps the incumbent
+        // equal discount keeps the incumbent
         vm.prank(alice);
         vm.expectRevert(VqAuctioner.BidTooLow.selector);
         auctioner.bidWithdraw(500e18, 400e18); // discount 100e18
+    }
+
+    // ------------------------------------------------------------------
+    // Auctioneer rotation with an expired unsettled round
+    // ------------------------------------------------------------------
+
+    // rotation never strands the winner's principal: rounds settle empty, escrow refunded
+    function test_RotationRefundsUnsettledDepositBid() public {
+        vm.warp(block.timestamp + 100);
+        auctioner.ensureDepositRound();
+
+        uint256 aliceBefore = alcx.balanceOf(alice);
+        vm.prank(alice);
+        auctioner.bidDeposit(1000e18, 1050e18);
+
+        vm.warp(block.timestamp + ROUND_DURATION + 1); // round expires, no more outbids
+
+        VqAuctioner replacement = new VqAuctioner(address(alcx), address(vault), treasury, ROUND_DURATION);
+        vm.prank(governance);
+        vault.proposeAuctioneer(address(replacement));
+        replacement.acceptVaultAuctioneer();
+
+        // permissionless settlement from the retired auctioneer makes the winner whole
+        auctioner.settleDepositRound(1);
+
+        assertEq(alcx.balanceOf(alice), aliceBefore, "full escrow refunded");
+        assertEq(alcx.balanceOf(address(auctioner)), 0);
+
+        VqAuctioner.Round memory round = auctioner.getDepositRound(1);
+        assertTrue(round.settled);
+        assertEq(round.totalFilled, 0);
+        assertEq(auctioner.currentDepositRound(), 2, "rounds rotate");
+    }
+
+    function test_RotationRefundsUnsettledWithdrawBid() public {
+        vm.warp(block.timestamp + 100);
+        auctioner.ensureDepositRound();
+        vm.prank(alice);
+        auctioner.bidDeposit(1000e18, 1050e18);
+        vm.warp(block.timestamp + ROUND_DURATION + 1);
+        auctioner.settleDepositRound(1);
+        assertEq(vault.balanceOf(alice), 1000e18);
+
+        vm.startPrank(alice);
+        vault.approve(address(auctioner), type(uint256).max);
+        auctioner.ensureWithdrawRound();
+        auctioner.bidWithdraw(1000e18, 970e18);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + ROUND_DURATION + 1);
+
+        VqAuctioner replacement = new VqAuctioner(address(alcx), address(vault), treasury, ROUND_DURATION);
+        vm.prank(governance);
+        vault.proposeAuctioneer(address(replacement));
+        replacement.acceptVaultAuctioneer();
+
+        auctioner.settleWithdrawRound(1);
+
+        assertEq(vault.balanceOf(alice), 1000e18, "full escrow refunded");
+        assertEq(vault.balanceOf(address(auctioner)), 0);
+
+        VqAuctioner.Round memory round = auctioner.getWithdrawRound(1);
+        assertTrue(round.settled);
+        assertEq(round.totalFilled, 0);
+        assertEq(auctioner.currentWithdrawRound(), 2, "rounds rotate");
     }
 }
