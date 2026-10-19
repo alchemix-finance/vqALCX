@@ -184,11 +184,11 @@ When governance pauses the vault:
 - **Open:** claims of already-escrowed positions (`deposit`/`mint` for filled deposit requests, `withdraw`/`redeem` for filled withdraw requests), vqALCX transfers, and `burnViaAuction` (instant-exit auction burns).
 - Exit liveness under pause is therefore claim-only: users with already-fulfilled requests can always exit; users cannot queue *new* exits during an incident.
 
-**Lazy drip model (timestamp-based)** The queue advances automatically as a side effect of state-changing vault calls (requests, claims, cancels, auction hooks, parameter changes, and the permissionless `drip()`). Views are pure reads — they report the state persisted by the last transaction and never advance the queue. Each elapsed window's budget is granted exactly once into a persisted `availableBudget` accumulator (`availableBudget += rate * (now - lastDripTime)`; `lastDripTime` always advances). A drip call touches at most `MAX_DRIP_ENTRIES` entries; if the queue is longer, the unspent budget carries in `availableBudget` and continues on the next call (bounded gas, unbounded progress over multiple calls, and a window's budget can never be re-granted — INV-Q-3):
+**Lazy drip model (timestamp-based)** The queue advances automatically as a side effect of state-changing vault calls (requests, claims, cancels, auction hooks, parameter changes, and the permissionless `drip()`). Views are pure reads — they report the state persisted by the last transaction and never advance the queue. Each elapsed window's budget is granted exactly once into a persisted `availableBudget` accumulator (`availableBudget += rate * (now - lastDripTime)`; `lastDripTime` always advances). A drip call touches at most `MAX_DRIP_ENTRIES` entries; if the queue is longer, only the budget the pending amount can absorb carries in `availableBudget` to the next call — any surplus beyond `pendingAmount` banks to auction capacity immediately, so dust backlogs cannot hoard auction budget (bounded gas, unbounded progress over multiple calls, and a window's budget can never be re-granted — INV-Q-3):
 
 ```
 fulfillable = min(availableBudget, queueDepth)
-// leftover when the queue is fully caught up -> availableAuctionCapacity
+// surplus beyond pendingAmount -> availableAuctionCapacity
 ```
 
 The bucket processes FIFO entries from the front until `fulfillable` is exhausted. No separate advance/fulfill transaction needed. **All timing uses `block.timestamp`, never `block.number`** (TC-3 — Aragon requirement for consistent governance clock).
@@ -635,7 +635,7 @@ Each queue (deposit and withdraw) is an independent leaky bucket:
 
 - **`capacity`** — maximum total amount that can be pending at once.
 - **`rate`** — amount fulfilled per second (the drip rate).
-- **`lastDripTime`** — timestamp of the last completed catchup. On state-changing vault interactions, the bucket catches up by granting `rate * (now - lastDripTime)` into `availableBudget` exactly once. A drip call touches at most `MAX_DRIP_ENTRIES` entries; if the queue is longer, the unspent budget carries over in `availableBudget` to the next call.
+- **`lastDripTime`** — timestamp of the last completed catchup. On state-changing vault interactions, the bucket catches up by granting `rate * (now - lastDripTime)` into `availableBudget` exactly once. A drip call touches at most `MAX_DRIP_ENTRIES` entries; if the queue is longer, only the budget the pending amount can absorb carries over in `availableBudget` to the next call, and any surplus beyond `pendingAmount` banks to auction capacity immediately.
 - **`availableBudget`** — fulfillment budget granted but not yet spent on fills; the unspent remainder when a drip call is capped. Rebased proportionally with `availableAuctionCapacity` on rate changes.
 - **Two-counter structure** — `head` and `tail` indices provide O(1) enqueue, O(1) dequeue, and O(1) position lookup.
 - **`queueDepth`** — total amount pending in the queue (`tail - head`).

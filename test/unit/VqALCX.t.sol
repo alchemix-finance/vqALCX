@@ -833,4 +833,32 @@ contract VqALCXTest is Test {
         vm.expectRevert(VqALCX.ExceedsProtocolRevenue.selector);
         vault.harvestRevenue(5e18);
     }
+
+    // dust cannot pin auction budget behind the drip entry cap
+    function test_DustBacklogCannotRetainBudget() public {
+        // 101 dust entries pin the deposit queue against the drip entry cap
+        for (uint256 i = 0; i < 101; i++) {
+            vm.prank(alice);
+            vault.requestDeposit(1);
+        }
+        vm.warp(block.timestamp + 20); // 2000e18 budget accrues
+
+        // bob's request drips: fills 100 dust entries, stops at the cap, but banks
+        // the surplus beyond the 1-wei pending amount instead of retaining it
+        vm.prank(bob);
+        vault.requestDeposit(1000e18);
+        assertGt(vault.depositAuctionCapacity(), 1999e18, "surplus banked despite pin");
+
+        // same block, no new budget: only what pending could absorb was retained,
+        // and it went to the dust entry — bob cannot claim yet
+        vm.prank(bob);
+        vm.expectRevert(VqALCX.RequestNotFulfillable.selector);
+        vault.deposit(1000e18, bob);
+
+        // future budget still serves the queue
+        vm.warp(block.timestamp + 11);
+        vm.prank(bob);
+        vault.deposit(1000e18, bob);
+        assertEq(vault.balanceOf(bob), 1000e18);
+    }
 }

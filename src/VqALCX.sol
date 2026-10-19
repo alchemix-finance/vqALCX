@@ -51,11 +51,9 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     // outstanding deposit principal: requested, not yet claimed or cancelled
     uint256 public depositLiability;
 
-    /// @notice Maximum queue entries one drip may touch. Each drip call processes at most this
-    /// many entries; if the queue is longer, the unspent budget carries in
-    /// Bucket.availableBudget and continues on the next call. Bounds drip gas so dust
-    /// spam can never brick the vault, while the accumulator guarantees the budget for
-    /// a time window is granted at most once (INV-Q-3).
+    // Max queue entries one drip may touch: bounds drip gas. Surplus budget beyond the
+    // pending amount banks to auctions immediately; the rest carries (INV-Q-3: a
+    // window's budget is granted exactly once).
     uint256 public constant MAX_DRIP_ENTRIES = 100;
 
     bool public paused;
@@ -141,9 +139,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
 
         while (budget > 0 && b.head < b.tail) {
             if (processed == MAX_DRIP_ENTRIES) {
-                // Queue longer than one call's budget: stop here; the remaining
-                // budget carries in availableBudget and fills continue on the next
-                // call instead of leaking to auction capacity ahead of the queue.
+                // Queue longer than one call's budget: continue on the next call.
                 break;
             }
             Request storage req = requests[b.head];
@@ -164,11 +160,13 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         }
 
         b.availableBudget = 0;
-        if (b.head == b.tail) {
-            // Queue fully caught up: leftover budget is available for auctions.
-            b.availableAuctionCapacity += budget;
+        if (budget > b.pendingAmount) {
+            // Bank the surplus the queue can never consume (empty queue, or a call
+            // capped with entries left): the queue keeps only what its pending
+            // amount can absorb, so dust backlogs cannot hoard auction budget.
+            b.availableAuctionCapacity += budget - b.pendingAmount;
+            b.availableBudget = b.pendingAmount;
         } else {
-            // Budget exhausted mid-queue (or call capped): carry the remainder.
             b.availableBudget = budget;
         }
     }
