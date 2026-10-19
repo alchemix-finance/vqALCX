@@ -58,6 +58,7 @@ Three contracts, layered (three-layer DAO separation, TC-2):
 - OZ v5 style: custom errors for reverts (`error NotGovernance()`, etc.), `SafeERC20`, `ReentrancyGuard` from `utils/`. (Two legacy `require(..., "auction capacity exceeded")` strings exist in the vault's auction hooks.)
 - Formatting (`[fmt]` in foundry.toml): 120-char lines, 4-space tabs, long int types (`uint256`).
 - Prefix contracts with `Vq`; two-step role changes follow the `proposeX`/`acceptX` pattern.
+- Comments: terse, one line, only for non-obvious invariants or gotchas. No verbose doc blocks restating what the code says, no §-citations, no narrating the development process or design decisions in comments.
 
 ## Testing
 

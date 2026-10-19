@@ -162,11 +162,9 @@ contract VqStaking is VotesExtended, ReentrancyGuard {
         return _totalStaked + _totalWarming;
     }
 
-
     function balanceOf(address account) external view returns (uint256) {
         return _getVotingUnits(account);
     }
-
 
     function getTotalSupply() external view returns (uint256) {
         return _getTotalSupply();

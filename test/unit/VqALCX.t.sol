@@ -642,4 +642,100 @@ contract VqALCXTest is Test {
         vm.prank(alice);
         assertEq(vault.maxDeposit(alice), 0);
     }
+
+    // ------------------------------------------------------------------
+    // Protocol revenue harvest
+    // ------------------------------------------------------------------
+
+    function test_PoC_RevenueLockedAboveWatermark() public {
+        vm.startPrank(alice);
+        vault.requestDeposit(1000e18); // deposit id 0
+        vm.stopPrank();
+        vm.warp(block.timestamp + 11);
+        vm.prank(alice);
+        vault.deposit(1000e18, alice);
+
+        // penalty: 1% of 500 = 5 ALCX retained
+        vm.startPrank(alice);
+        vault.requestDeposit(500e18); // deposit id 1
+        vault.cancelDepositRequest(1);
+        vm.stopPrank();
+
+        // penalty: 1% of 400 = 4 vqALCX burned, backing stays
+        vm.startPrank(alice);
+        vault.requestWithdraw(400e18); // withdraw id 0
+        vault.cancelWithdrawRequest(0);
+        vm.stopPrank();
+
+        // discount: burn 200, pay out 180 -> 20 ALCX retained
+        vm.prank(alice);
+        vault.transfer(auctioneer, 200e18);
+        vm.warp(block.timestamp + 10); // bank withdraw auction capacity
+        vm.prank(auctioneer);
+        vault.burnViaAuction(alice, 200e18, 180e18);
+
+        // full unwind: 1000 - 4 burned - 200 to auctioneer
+        vm.prank(alice);
+        vault.requestWithdraw(796e18); // withdraw id 1
+        vm.warp(block.timestamp + 8); // 8s * 100/s = 800 >= 796
+        vm.prank(alice);
+        vault.redeem(796e18, alice, alice);
+
+        uint256 stuck = alcx.balanceOf(address(vault));
+        assertEq(vault.totalSupply(), 0, "shares outstanding");
+        assertEq(stuck, 29e18, "accrued revenue stuck in vault"); // 5 + 4 + 20
+
+        // every ALCX exit path is dead at totalSupply == 0
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.withdraw(1, alice, alice);
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.redeem(1, alice, alice);
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.cancelDepositRequest(0);
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.cancelWithdrawRequest(0);
+        vm.prank(auctioneer);
+        vm.expectRevert();
+        vault.burnViaAuction(alice, 1, 1);
+
+        assertEq(alcx.balanceOf(address(vault)), stuck, "revenue permanently locked");
+
+        assertEq(vault.protocolRevenue(), 29e18, "accounting matches surplus");
+        vm.prank(governance);
+        vault.harvestRevenue(29e18);
+        assertEq(alcx.balanceOf(address(vault)), 0, "vault drained");
+        assertEq(alcx.balanceOf(governance), 29e18);
+        assertEq(vault.protocolRevenue(), 0);
+
+        vm.prank(governance);
+        vm.expectRevert(VqALCX.ExceedsProtocolRevenue.selector);
+        vault.harvestRevenue(1);
+        vm.prank(alice);
+        vm.expectRevert(VqALCX.NotGovernance.selector);
+        vault.harvestRevenue(0);
+    }
+
+    function test_HarvestNeverTouchesQueuedEscrow() public {
+        vm.startPrank(alice);
+        vault.requestDeposit(1000e18); // id 0: queued, unfilled
+        vault.requestDeposit(500e18); // id 1: cancelled -> 5 ALCX penalty
+        vault.cancelDepositRequest(1);
+        vm.stopPrank();
+
+        assertEq(vault.protocolRevenue(), 5e18);
+
+        vm.prank(governance);
+        vault.harvestRevenue(5e18);
+
+        // queued escrow still there and still claims 1:1
+        assertEq(alcx.balanceOf(address(vault)), 1000e18);
+        vm.warp(block.timestamp + 11);
+        vm.prank(alice);
+        vault.deposit(1000e18, alice);
+        assertEq(vault.balanceOf(alice), 1000e18);
+    }
 }

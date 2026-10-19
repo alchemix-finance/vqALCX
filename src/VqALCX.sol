@@ -43,6 +43,9 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     uint256 public constant MAX_BPS = 10000;
     uint256 public cancellationPenaltyBps = 100;
 
+    // incremental, not balance - totalSupply: that also counts queued deposit escrow
+    uint256 public protocolRevenue;
+
     /// @notice Maximum queue entries one drip may touch. Each drip call processes at most this
     /// many entries; if the queue is longer, the unspent budget carries in
     /// Bucket.availableBudget and continues on the next call. Bounds drip gas so dust
@@ -75,6 +78,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     event AuctioneerAccepted(address indexed newAuctioneer);
     event CancellationPenaltyUpdated(uint256 penaltyBps);
     event PauseChanged(bool paused);
+    event RevenueHarvested(address indexed to, uint256 amount);
 
     error NotGovernance();
     error NotAuctioneer();
@@ -89,6 +93,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     error PayoutExceedsBurn();
     error InvalidBucketParams();
     error InvalidPenalty();
+    error ExceedsProtocolRevenue();
 
     constructor(address asset_, address governance_, address auctioneer_) ERC20("veQueue ALCX", "vqALCX") {
         if (asset_ == address(0) || governance_ == address(0)) revert ZeroAddress();
@@ -226,6 +231,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (refund > 0) {
             _asset.safeTransfer(msg.sender, refund);
         }
+        protocolRevenue += penalty;
 
         emit DepositRequestCancelled(requestId, penalty);
     }
@@ -249,6 +255,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (refund > 0) {
             _transfer(address(this), msg.sender, refund);
         }
+        protocolRevenue += penalty; // backing of the burned shares stays
 
         emit WithdrawRequestCancelled(requestId, penalty);
     }
@@ -409,7 +416,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         b.availableAuctionCapacity -= burnAmount;
 
         _burn(authorizedAuctioneer, burnAmount);
-        // discount (burnAmount - payoutAmount) stays in the vault as protocol profit
+        protocolRevenue += burnAmount - payoutAmount; // discount stays in the vault
         _asset.safeTransfer(winner, payoutAmount);
         emit AuctionBurnExecuted(winner, burnAmount);
         emit Withdraw(msg.sender, winner, authorizedAuctioneer, burnAmount, payoutAmount);
@@ -450,6 +457,13 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (penaltyBps > MAX_CANCELLATION_PENALTY_BPS) revert InvalidPenalty();
         cancellationPenaltyBps = penaltyBps;
         emit CancellationPenaltyUpdated(penaltyBps);
+    }
+
+    function harvestRevenue(uint256 amount) external onlyGovernance {
+        if (amount > protocolRevenue) revert ExceedsProtocolRevenue();
+        protocolRevenue -= amount;
+        _asset.safeTransfer(msg.sender, amount);
+        emit RevenueHarvested(msg.sender, amount);
     }
 
     function proposeGovernance(address newGovernance) external onlyGovernance {
