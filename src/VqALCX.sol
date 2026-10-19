@@ -41,6 +41,8 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
 
     uint256 public constant MAX_CANCELLATION_PENALTY_BPS = 500;
     uint256 public constant MAX_BPS = 10000;
+    // OC-3 overflow bound: rate * elapsed must never overflow the drip accumulator
+    uint256 public constant MAX_BUCKET_RATE = 1_000_000e18;
     uint256 public cancellationPenaltyBps = 100;
 
     // incremental, not balance - totalSupply: that also counts queued deposit escrow
@@ -423,7 +425,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function setDepositBucketParams(uint256 rate, uint256 capacity) external onlyGovernance {
-        if (rate == 0) revert InvalidBucketParams();
+        if (rate == 0 || rate > MAX_BUCKET_RATE) revert InvalidBucketParams();
         _dripDepositBucket();
         if (capacity < depositBucket.pendingAmount) revert InvalidBucketParams();
         if (rate != depositBucket.rate && depositBucket.rate != 0) {
@@ -440,7 +442,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function setWithdrawBucketParams(uint256 rate, uint256 capacity) external onlyGovernance {
-        if (rate == 0) revert InvalidBucketParams();
+        if (rate == 0 || rate > MAX_BUCKET_RATE) revert InvalidBucketParams();
         _dripWithdrawBucket();
         if (capacity < withdrawBucket.pendingAmount) revert InvalidBucketParams();
         if (rate != withdrawBucket.rate && withdrawBucket.rate != 0) {

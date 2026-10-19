@@ -738,4 +738,28 @@ contract VqALCXTest is Test {
         vault.deposit(1000e18, alice);
         assertEq(vault.balanceOf(alice), 1000e18);
     }
+
+    function test_BucketRateUpperBound() public {
+        uint256 cap = vault.MAX_BUCKET_RATE();
+
+        vm.prank(governance);
+        vm.expectRevert(VqALCX.InvalidBucketParams.selector);
+        vault.setWithdrawBucketParams(cap + 1, CAPACITY);
+
+        vm.prank(governance);
+        vm.expectRevert(VqALCX.InvalidBucketParams.selector);
+        vault.setDepositBucketParams(type(uint256).max, CAPACITY);
+
+        // boundary rate accepted and the vault stays live under it
+        vm.prank(governance);
+        vault.setWithdrawBucketParams(cap, CAPACITY);
+
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+        vm.warp(block.timestamp + 11);
+        vm.prank(alice);
+        vault.deposit(1000e18, alice);
+        vault.drip();
+        assertEq(vault.balanceOf(alice), 1000e18);
+    }
 }
