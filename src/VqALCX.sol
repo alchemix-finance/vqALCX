@@ -306,13 +306,14 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         _drip();
         (bool found, uint256 requestId) = _findClaimableRequest(depositRequests, depositRequestIds[msg.sender], assets);
         if (!found) revert RequestNotFulfillable();
+        return _claimDeposit(requestId, assets, receiver);
+    }
 
-        depositRequests[requestId].claimed += assets;
-        depositLiability -= assets;
-
-        _mint(receiver, assets);
-        emit Deposit(msg.sender, receiver, assets, assets);
-        return assets;
+    // direct claim: skips the per-account history scan for frequent users
+    function depositById(uint256 requestId, uint256 assets, address receiver) public nonReentrant returns (uint256) {
+        if (assets == 0) revert ZeroAmount();
+        _drip();
+        return _claimDeposit(requestId, assets, receiver);
     }
 
     function maxMint(address receiver) public view returns (uint256) {
@@ -328,13 +329,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         _drip();
         (bool found, uint256 requestId) = _findClaimableRequest(depositRequests, depositRequestIds[msg.sender], shares);
         if (!found) revert RequestNotFulfillable();
-
-        depositRequests[requestId].claimed += shares;
-        depositLiability -= shares;
-
-        _mint(receiver, shares);
-        emit Deposit(msg.sender, receiver, shares, shares);
-        return shares;
+        return _claimDeposit(requestId, shares, receiver);
     }
 
     function maxWithdraw(address owner) public view returns (uint256) {
@@ -350,18 +345,18 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         _drip();
         (bool found, uint256 requestId) = _findClaimableRequest(withdrawRequests, withdrawRequestIds[owner], assets);
         if (!found) revert RequestNotFulfillable();
+        return _claimWithdraw(requestId, assets, receiver, owner);
+    }
 
-        withdrawRequests[requestId].claimed += assets;
-
-        if (msg.sender != owner) {
-            _spendAllowance(owner, msg.sender, assets);
-        }
-
-        uint256 payout = _scaled(assets);
-        _burn(address(this), assets);
-        _asset.safeTransfer(receiver, payout);
-        emit Withdraw(msg.sender, receiver, owner, payout, assets);
-        return payout;
+    // direct claim: skips the per-account history scan for frequent users
+    function withdrawById(uint256 requestId, uint256 assets, address receiver, address owner)
+        external
+        nonReentrant
+        returns (uint256)
+    {
+        if (assets == 0) revert ZeroAmount();
+        _drip();
+        return _claimWithdraw(requestId, assets, receiver, owner);
     }
 
     function maxRedeem(address owner) public view returns (uint256) {
@@ -377,17 +372,40 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         _drip();
         (bool found, uint256 requestId) = _findClaimableRequest(withdrawRequests, withdrawRequestIds[owner], shares);
         if (!found) revert RequestNotFulfillable();
+        return _claimWithdraw(requestId, shares, receiver, owner);
+    }
 
-        withdrawRequests[requestId].claimed += shares;
+    function _claimDeposit(uint256 requestId, uint256 amount, address receiver) internal returns (uint256) {
+        Request storage req = depositRequests[requestId];
+        if (req.owner != msg.sender) revert NotRequestOwner();
+        if (req.filled - req.claimed < amount) revert RequestNotFulfillable();
+
+        req.claimed += amount;
+        depositLiability -= amount;
+
+        _mint(receiver, amount);
+        emit Deposit(msg.sender, receiver, amount, amount);
+        return amount;
+    }
+
+    function _claimWithdraw(uint256 requestId, uint256 amount, address receiver, address owner)
+        internal
+        returns (uint256)
+    {
+        Request storage req = withdrawRequests[requestId];
+        if (req.owner != owner) revert NotRequestOwner();
+        if (req.filled - req.claimed < amount) revert RequestNotFulfillable();
+
+        req.claimed += amount;
 
         if (msg.sender != owner) {
-            _spendAllowance(owner, msg.sender, shares);
+            _spendAllowance(owner, msg.sender, amount);
         }
 
-        uint256 payout = _scaled(shares);
-        _burn(address(this), shares);
+        uint256 payout = _scaled(amount);
+        _burn(address(this), amount);
         _asset.safeTransfer(receiver, payout);
-        emit Withdraw(msg.sender, receiver, owner, payout, shares);
+        emit Withdraw(msg.sender, receiver, owner, payout, amount);
         return payout;
     }
 

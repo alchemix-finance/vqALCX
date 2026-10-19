@@ -165,7 +165,7 @@ vqALCX is an ERC4626-compliant vault. Users choose between two orthogonal paths:
 - Each `requestDeposit()` records the user's deposit amount in the queue
 - Each `requestWithdraw()` records the user's withdrawal amount in the queue
 - Queue entries are not tokenized — they are internal accounting entries
-- On fulfillment, the user calls `deposit()` or `withdraw()` to claim their fulfilled position
+- On fulfillment, the user calls `deposit()` or `withdraw()` to claim their fulfilled position. Frequent users can call `depositById(requestId, ...)` / `withdrawById(requestId, ...)` to claim a specific request without scanning their request history (the standard claim functions linearly scan the account's request-ID array, so their gas grows with request count).
 
 **Queue cancellation with penalties:**
 
