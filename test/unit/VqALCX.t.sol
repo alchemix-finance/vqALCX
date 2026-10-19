@@ -647,7 +647,7 @@ contract VqALCXTest is Test {
     // Protocol revenue harvest
     // ------------------------------------------------------------------
 
-    function test_PoC_RevenueLockedAboveWatermark() public {
+    function test_HarvestRevenue() public {
         vm.startPrank(alice);
         vault.requestDeposit(1000e18); // deposit id 0
         vm.stopPrank();

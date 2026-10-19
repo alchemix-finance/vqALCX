@@ -140,7 +140,8 @@ contract VqAuctioner is ReentrancyGuard {
         if (block.timestamp > round.endTime) revert RoundNotActive();
         if (round.totalFilled + amount > round.capacity) revert InsufficientCapacity();
 
-        if (round.highestBidder != address(0) && maxPrice <= round.highestBidPrice) {
+        // rank by revenue: a zero-premium 1:1 bid must not displace a smaller premium bid
+        if (round.highestBidder != address(0) && maxPrice - amount <= round.highestBidPrice - round.highestBidAmount) {
             revert BidTooLow();
         }
 
@@ -169,19 +170,10 @@ contract VqAuctioner is ReentrancyGuard {
 
         if (round.totalFilled + amount > round.capacity) revert InsufficientCapacity();
 
-        // For withdrawals: minPrice is the minimum ALCX the bidder wants to receive
-        // A lower minPrice = more competitive (willing to accept less).
-        // A strictly lower price always outbids; at equal price, a strictly larger
-        // amount outbids. Without the equal-price escape hatch, a floor-price bid
-        // (e.g. minPrice = 0) could never be replaced and a dust bid would
-        // monopolize the round.
-        if (round.highestBidder != address(0)) {
-            if (minPrice > round.highestBidPrice) {
-                revert BidTooLow();
-            }
-            if (minPrice == round.highestBidPrice && amount <= round.highestBidAmount) {
-                revert BidTooLow();
-            }
+        // rank by revenue (discount = amount - minPrice): a dust floor bid is always outbid
+        // by any real discount and cannot monopolize the round; ties keep the incumbent
+        if (round.highestBidder != address(0) && amount - minPrice <= round.highestBidAmount - round.highestBidPrice) {
+            revert BidTooLow();
         }
 
         if (round.highestBidder != address(0)) {

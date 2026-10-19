@@ -463,4 +463,119 @@ contract VqAuctionerTest is Test {
         VqAuctioner.Round memory round = auctioner.getWithdrawRound(1);
         assertFalse(round.settled);
     }
+
+    // ------------------------------------------------------------------
+    // Revenue-ranked bidding
+    // ------------------------------------------------------------------
+
+    function test_WithdrawBidRejectsDustFloorBid() public {
+        vm.warp(block.timestamp + 100);
+        auctioner.ensureDepositRound();
+
+        vm.prank(bob);
+        vault.requestDeposit(1000e18);
+        vm.prank(alice);
+        auctioner.bidDeposit(1000e18, 1050e18);
+
+        vm.warp(block.timestamp + 11); // fill bob's queue request
+        vm.prank(bob);
+        vault.deposit(1000e18, bob);
+
+        vm.warp(block.timestamp + ROUND_DURATION);
+        auctioner.settleDepositRound(1);
+        assertEq(vault.balanceOf(alice), 1000e18);
+        assertEq(vault.balanceOf(bob), 1000e18);
+
+        vm.startPrank(alice);
+        vault.approve(address(auctioner), type(uint256).max);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        vault.approve(address(auctioner), type(uint256).max);
+        vm.stopPrank();
+
+        auctioner.ensureWithdrawRound();
+
+        vm.prank(alice);
+        auctioner.bidWithdraw(1000e18, 970e18); // honest exit: 30e18 discount to the protocol
+
+        // post-fix: dust floor bid reverts (discount 1 wei < 30e18)
+        vm.prank(bob);
+        vm.expectRevert(VqAuctioner.BidTooLow.selector);
+        auctioner.bidWithdraw(1, 0);
+
+        uint256 aliceAlcxBefore = alcx.balanceOf(alice);
+        vm.warp(block.timestamp + ROUND_DURATION + 1);
+        auctioner.settleWithdrawRound(1);
+
+        VqAuctioner.Round memory round = auctioner.getWithdrawRound(1);
+        assertEq(round.highestBidder, alice, "honest bidder keeps the round");
+        assertEq(round.totalFilled, 1000e18);
+        assertEq(alcx.balanceOf(alice), aliceAlcxBefore + 970e18, "exit executed");
+        assertEq(vault.balanceOf(alice), 0);
+        assertGe(alcx.balanceOf(address(vault)) - vault.totalSupply(), 30e18, "discount kept as revenue");
+    }
+
+    function test_DepositBidRejectsZeroPremiumOutbid() public {
+        vm.warp(block.timestamp + 100);
+        auctioner.ensureDepositRound();
+
+        vm.prank(alice);
+        auctioner.bidDeposit(100e18, 150e18); // premium 50e18
+
+        // post-fix: zero-premium 1:1 bid reverts (premium 0 < 50e18)
+        vm.prank(bob);
+        vm.expectRevert(VqAuctioner.BidTooLow.selector);
+        auctioner.bidDeposit(3600e18, 3600e18);
+
+        vm.warp(block.timestamp + ROUND_DURATION + 1);
+        uint256 treasuryBefore = alcx.balanceOf(treasury);
+        auctioner.settleDepositRound(1);
+
+        assertEq(alcx.balanceOf(treasury), treasuryBefore + 50e18, "premium collected");
+        assertEq(vault.balanceOf(alice), 100e18);
+    }
+
+    function test_WithdrawBidRankingByDiscount() public {
+        vm.warp(block.timestamp + 100);
+        auctioner.ensureDepositRound();
+
+        vm.prank(bob);
+        vault.requestDeposit(1000e18);
+        vm.prank(alice);
+        auctioner.bidDeposit(1000e18, 1050e18);
+
+        vm.warp(block.timestamp + 11); // fill bob's queue request
+        vm.prank(bob);
+        vault.deposit(1000e18, bob);
+
+        vm.warp(block.timestamp + ROUND_DURATION);
+        auctioner.settleDepositRound(1);
+
+        vm.startPrank(alice);
+        vault.approve(address(auctioner), type(uint256).max);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        vault.approve(address(auctioner), type(uint256).max);
+        vm.stopPrank();
+
+        auctioner.ensureWithdrawRound();
+
+        vm.prank(alice);
+        auctioner.bidWithdraw(1000e18, 970e18); // discount 30e18
+
+        uint256 aliceVqBefore = vault.balanceOf(alice);
+        vm.prank(bob);
+        auctioner.bidWithdraw(1000e18, 900e18); // discount 100e18 replaces
+
+        assertEq(vault.balanceOf(alice), aliceVqBefore + 1000e18, "outbid bidder refunded");
+
+        VqAuctioner.Round memory round = auctioner.getWithdrawRound(1);
+        assertEq(round.highestBidder, bob);
+        assertEq(round.highestBidPrice, 900e18);
+
+        // equal discount keeps the incumbent
+        vm.prank(alice);
+        vm.expectRevert(VqAuctioner.BidTooLow.selector);
+        auctioner.bidWithdraw(500e18, 400e18); // discount 100e18
+    }
 }

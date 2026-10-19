@@ -224,7 +224,7 @@ The auction contract (`vqAuctioner`) runs continuous rolling auctions for both d
 The auctioneer is pluggable. The v1 implementation uses a conventional **English ascending auction** with rolling rounds:
 
 - **Each round has a fixed duration** (governance-configurable, e.g. 1 hour).
-- **Bidding is competitive in both directions** — deposit auctions ascend on `maxPrice` (each new bid must strictly exceed the current highest). Withdrawal auctions descend on `minPrice` (each new bid must be strictly lower), with an equal-price escape hatch: at the same `minPrice`, a bid for strictly more capacity replaces the leader. This keeps floor-price (`minPrice = 0`) bids replaceable so a dust bid cannot monopolize a round. Bidders lock their ALCX (deposit auctions) or vqALCX (withdrawal auctions) into the auctioneer at bid time to prevent griefing.
+- **Bidding is competitive in both directions, ranked by revenue** — deposit bids must offer a strictly higher premium (`maxPrice - amount`) than the leader; withdrawal bids must offer a strictly higher discount (`amount - minPrice`); ties keep the incumbent bidder. Raw-price ranking would let a large 1:1 deposit bid displace a smaller premium-paying bid, and a dust floor-price withdrawal bid monopolize rounds; revenue ranking makes both trivially outbiddable. Bidders lock their ALCX (deposit auctions) or vqALCX (withdrawal auctions) into the auctioneer at bid time to prevent griefing.
 - **Outbid funds are refunded** — when a higher bid arrives, the previous bidder's locked funds are returned.
 - **Round settles at expiry** — the highest bidder wins. The clearing price is the winning bid amount. The winner pays base (1:1) + premium (above watermark).
 - **Overlapping rounds** — when a round settles, the next round is already active. There is always a live auction.
@@ -647,7 +647,7 @@ No external keeper or epoch boundary is needed. The queue is always current afte
 
 The auctioneer is pluggable (governance can swap the implementation). The v1 uses a conventional English ascending auction:
 
-- **Ascending bids (deposit) / descending bids (withdrawal)** — deposit bids must strictly exceed the current `maxPrice`; withdrawal bids must be strictly below the current `minPrice`, or equal to it with a strictly larger amount. Outbid funds are refunded immediately.
+- **Revenue-ranked bids** — deposit bids must strictly exceed the leader's premium (`maxPrice - amount`); withdrawal bids must strictly exceed the leader's discount (`amount - minPrice`); ties keep the incumbent. Outbid funds are refunded immediately.
 - **Bid locking** — bidders lock ALCX (deposit) or vqALCX (withdrawal) in the auctioneer at bid time. Prevents griefing.
 - **Rolling rounds** — auction rounds overlap. When one settles, the next is already active.
 - **Capacity per round** — bounded by `rate * roundDuration`, drawn from the same leaky bucket as the queue. Queue and auction share the rate budget — queue gets it free, auction allocates to highest bidders. The rate limit is never bypassed.

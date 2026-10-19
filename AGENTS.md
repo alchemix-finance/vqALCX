@@ -42,7 +42,7 @@ Three contracts, layered (three-layer DAO separation, TC-2):
 - `requestWithdraw` escrows vqALCX at request time. Cancellation refunds minus `cancellationPenaltyBps` (capped at 500 bps); deposit-cancellation penalty is ALCX, withdraw-cancellation penalty is burned vqALCX.
 - `mintViaAuction` (deposit side, `whenNotPaused`) mints to the winner against ALCX the auctioneer already transferred to the vault. `burnViaAuction` (no pause guard) burns from the **auctioneer's own balance** (it holds the locked winning bid) and pays the winner `payoutAmount ≤ burnAmount`; the discount stays in the vault. If the vault is paused at deposit-round settlement, the settle path does not attempt the mint: it refunds the winner's full locked price, settles the round empty, and rotates — a pause never strands the winner's principal (withdraw-side settlement is unpaused by design).
 - `maxDeposit`/`maxWithdraw`/`maxMint`/`maxRedeem` are **non-standard**: they return the claimant's **largest single-request claimable** (`filled − claimed`) — not a liquidity cap and not an aggregate — so `deposit(maxDeposit())` always succeeds. `deposit`/`mint`/`withdraw`/`redeem` find a single request with `claimable >= amount` via a linear scan of the user's request-ID array (gas grows with per-user request count; claims are per single request — you cannot claim across multiple requests in one call). `maxDeposit`/`maxMint` quote `msg.sender` (the claimant), not the `receiver` argument; `maxWithdraw`/`maxRedeem` quote `owner`.
-- Deposit auctions: higher `maxPrice` wins. Withdrawal auctions are **reverse-ranked**: a *lower* `minPrice` wins (bidder accepts a bigger discount); at equal `minPrice`, a strictly larger amount replaces the leader (keeps floor-price bids outbiddable). Bids lock assets in the auctioneer; outbid users are refunded immediately.
+- Deposit auctions: the highest **premium** (`maxPrice − amount`) wins. Withdrawal auctions: the highest **discount** (`amount − minPrice`) wins; ties keep the incumbent. Bids lock assets in the auctioneer; outbid users are refunded immediately.
 
 ## Hard constraints (violating these breaks the design)
 
@@ -63,6 +63,7 @@ Three contracts, layered (three-layer DAO separation, TC-2):
 ## Testing
 
 - Unit tests in `test/unit/<Contract>.t.sol`, one file per contract; invariant tests in `test/invariant/` with a handler contract in `test/invariant/handlers/`.
+- Regression tests for fixed issues are named for the behavior they guarantee, never `test_PoC_*` — a fixed issue has no PoC, only a regression test.
 - Tests use the shared `MockALCX`/`MockReward` from `test/mocks/Mocks.sol` (real ALCX is not in the repo), `vm.prank`/`vm.startPrank`, and named actors: `governance = 0xCAFE`, `auctioneer = 0xBEEF`, `alice`, `bob`. Standard bucket params: `RATE = 100e18`, `CAPACITY = 10_000e18`.
 - Invariant pattern: handler wraps vault calls with `bound()` inputs and `try/catch` to swallow expected reverts (so reverts don't abort the run); `advanceTime` uses `vm.warp`. Invariant functions are named `invariant_<Name>` and tagged with the spec's INV- IDs (e.g. `INV-WM-1: vault balance >= totalSupply`).
 - Invariant tests target only the vault today; there is no auctioner/staking/cross-contract invariant harness yet (the audit plan calls for one).
