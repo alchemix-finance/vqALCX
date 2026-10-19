@@ -296,8 +296,8 @@ contract VqAuctionerTest is Test {
     function test_WithdrawSettlementPartiallyFillsWhenCapacityIsShort() public {
         (VqALCX vault2, VqAuctioner auctioner2, MockALCX alcx2) = _deploySlowBuckets();
 
-        deal(address(vault2), bob, 100e18);
-        deal(address(vault2), alice, 1000e18);
+        deal(address(vault2), bob, 100e18, true);
+        deal(address(vault2), alice, 1000e18, true);
 
         vm.prank(bob);
         vault2.requestWithdraw(100e18);
@@ -324,8 +324,8 @@ contract VqAuctionerTest is Test {
     function test_WithdrawSettlementRefundsWinnerWhenCapacityIsZero() public {
         (VqALCX vault2, VqAuctioner auctioner2, MockALCX alcx2) = _deploySlowBuckets();
 
-        deal(address(vault2), bob, 1100e18);
-        deal(address(vault2), alice, 1000e18);
+        deal(address(vault2), bob, 1100e18, true);
+        deal(address(vault2), alice, 1000e18, true);
 
         vm.prank(bob);
         vault2.requestWithdraw(1100e18);

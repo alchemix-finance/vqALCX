@@ -48,6 +48,9 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     // incremental, not balance - totalSupply: that also counts queued deposit escrow
     uint256 public protocolRevenue;
 
+    // outstanding deposit principal: requested, not yet claimed or cancelled
+    uint256 public depositLiability;
+
     /// @notice Maximum queue entries one drip may touch. Each drip call processes at most this
     /// many entries; if the queue is longer, the unspent budget carries in
     /// Bucket.availableBudget and continues on the next call. Bounds drip gas so dust
@@ -196,6 +199,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
             Request({owner: msg.sender, amount: assets, filled: 0, claimed: 0, cancelled: false});
         depositRequestIds[msg.sender].push(requestId);
         b.pendingAmount += assets;
+        depositLiability += assets;
 
         emit DepositRequested(requestId, msg.sender, assets);
     }
@@ -225,11 +229,14 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         uint256 remaining = req.amount - req.filled;
         if (remaining == 0) revert AlreadyFulfilled();
 
+        uint256 penalty = (remaining * cancellationPenaltyBps) / MAX_BPS;
+        // refund uses the watermark including this claim: her exit must be ratio-neutral
+        uint256 refund = _scaled(remaining - penalty);
+
         req.cancelled = true;
         depositBucket.pendingAmount -= remaining;
+        depositLiability -= remaining;
 
-        uint256 penalty = (remaining * cancellationPenaltyBps) / MAX_BPS;
-        uint256 refund = remaining - penalty;
         if (refund > 0) {
             _asset.safeTransfer(msg.sender, refund);
         }
@@ -266,12 +273,23 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         return _asset.balanceOf(address(this));
     }
 
+    // QG-2 pro-rata watermark, 1e18 = 1:1: balance / (totalSupply + depositLiability) when short
+    function watermark() public view returns (uint256) {
+        uint256 claims = totalSupply() + depositLiability;
+        uint256 assets = _asset.balanceOf(address(this));
+        return assets >= claims ? 1e18 : (assets * 1e18) / claims;
+    }
+
+    function _scaled(uint256 amount) internal view returns (uint256) {
+        return (amount * watermark()) / 1e18;
+    }
+
     function convertToShares(uint256 assets) public pure returns (uint256) {
         return assets; // 1:1 at watermark
     }
 
-    function convertToAssets(uint256 shares) public pure returns (uint256) {
-        return shares; // 1:1 at watermark
+    function convertToAssets(uint256 shares) public view returns (uint256) {
+        return _scaled(shares); // 1:1 at watermark, pro-rata when underwater
     }
 
     function maxDeposit(address) public view returns (uint256) {
@@ -292,6 +310,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (!found) revert RequestNotFulfillable();
 
         depositRequests[requestId].claimed += assets;
+        depositLiability -= assets;
 
         _mint(receiver, assets);
         emit Deposit(msg.sender, receiver, assets, assets);
@@ -313,6 +332,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         if (!found) revert RequestNotFulfillable();
 
         depositRequests[requestId].claimed += shares;
+        depositLiability -= shares;
 
         _mint(receiver, shares);
         emit Deposit(msg.sender, receiver, shares, shares);
@@ -323,8 +343,8 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
         return _largestClaimable(withdrawRequests, withdrawRequestIds[owner]);
     }
 
-    function previewWithdraw(uint256 assets) public pure returns (uint256) {
-        return assets; // 1:1
+    function previewWithdraw(uint256 assets) public view returns (uint256) {
+        return _scaled(assets);
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public nonReentrant returns (uint256) {
@@ -339,18 +359,19 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
             _spendAllowance(owner, msg.sender, assets);
         }
 
+        uint256 payout = _scaled(assets);
         _burn(address(this), assets);
-        _asset.safeTransfer(receiver, assets);
-        emit Withdraw(msg.sender, receiver, owner, assets, assets);
-        return assets;
+        _asset.safeTransfer(receiver, payout);
+        emit Withdraw(msg.sender, receiver, owner, payout, assets);
+        return payout;
     }
 
     function maxRedeem(address owner) public view returns (uint256) {
         return maxWithdraw(owner);
     }
 
-    function previewRedeem(uint256 shares) public pure returns (uint256) {
-        return shares; // 1:1
+    function previewRedeem(uint256 shares) public view returns (uint256) {
+        return _scaled(shares);
     }
 
     function redeem(uint256 shares, address receiver, address owner) public nonReentrant returns (uint256) {
@@ -365,10 +386,11 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
             _spendAllowance(owner, msg.sender, shares);
         }
 
+        uint256 payout = _scaled(shares);
         _burn(address(this), shares);
-        _asset.safeTransfer(receiver, shares);
-        emit Withdraw(msg.sender, receiver, owner, shares, shares);
-        return shares;
+        _asset.safeTransfer(receiver, payout);
+        emit Withdraw(msg.sender, receiver, owner, payout, shares);
+        return payout;
     }
 
     function _findClaimableRequest(
@@ -419,7 +441,7 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
 
         _burn(authorizedAuctioneer, burnAmount);
         protocolRevenue += burnAmount - payoutAmount; // discount stays in the vault
-        _asset.safeTransfer(winner, payoutAmount);
+        _asset.safeTransfer(winner, _scaled(payoutAmount));
         emit AuctionBurnExecuted(winner, burnAmount);
         emit Withdraw(msg.sender, winner, authorizedAuctioneer, burnAmount, payoutAmount);
     }
@@ -462,7 +484,12 @@ contract VqALCX is ERC20, IERC4626, ReentrancyGuard {
     }
 
     function harvestRevenue(uint256 amount) external onlyGovernance {
-        if (amount > protocolRevenue) revert ExceedsProtocolRevenue();
+        uint256 balance = _asset.balanceOf(address(this));
+        uint256 claims = totalSupply() + depositLiability;
+        // revenue is junior: no harvest while underwater or beyond the real surplus
+        if (amount > protocolRevenue || balance < claims || amount > balance - claims) {
+            revert ExceedsProtocolRevenue();
+        }
         protocolRevenue -= amount;
         _asset.safeTransfer(msg.sender, amount);
         emit RevenueHarvested(msg.sender, amount);

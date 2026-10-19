@@ -762,4 +762,75 @@ contract VqALCXTest is Test {
         vault.drip();
         assertEq(vault.balanceOf(alice), 1000e18);
     }
+
+    // QG-2: losses are shared pro-rata; exits at the live watermark preserve it
+    function test_InsolvencyLossSharedEqually() public {
+        address carol = address(0x3333);
+        alcx.mint(carol, 100_000e18);
+        vm.startPrank(carol);
+        alcx.approve(address(vault), type(uint256).max);
+        vm.stopPrank();
+
+        vm.prank(alice);
+        vault.requestDeposit(1000e18);
+        vm.prank(bob);
+        vault.requestDeposit(1000e18);
+        vm.prank(carol);
+        vault.requestDeposit(1000e18);
+
+        vm.warp(block.timestamp + 20); // budget 2000 fills alice and bob, carol stays queued
+        vm.prank(alice);
+        vault.deposit(1000e18, alice);
+        vm.prank(bob);
+        vault.deposit(1000e18, bob);
+
+        // catastrophic external loss: 3000 -> 1000 ALCX; claims = 2000 shares + 1000 escrow
+        deal(address(alcx), address(vault), 1000e18);
+
+        assertEq(vault.watermark(), 333333333333333333, "watermark = 1/3");
+        assertEq(vault.convertToAssets(1000e18), 333333333333333333000);
+
+        // carol's queued escrow shares the same loss: (1000 - 1% penalty) * 1/3
+        uint256 carolBefore = alcx.balanceOf(carol);
+        vm.prank(carol);
+        vault.cancelDepositRequest(2);
+        assertEq(alcx.balanceOf(carol), carolBefore + 329999999999999999670);
+
+        // alice exits first: paid her pro-rata share (claims now 2000, assets 670)
+        uint256 aliceAlcxBefore = alcx.balanceOf(alice);
+        vm.prank(alice);
+        vault.requestWithdraw(1000e18);
+        vm.warp(block.timestamp + 20);
+        vm.prank(alice);
+        uint256 alicePayout = vault.redeem(1000e18, alice, alice);
+        assertEq(alcx.balanceOf(alice), aliceAlcxBefore + 335e18);
+
+        // her exit preserved the watermark for the remaining claimant
+        assertApproxEqAbs(vault.watermark(), 335000000000000000, 2, "exits preserve the watermark");
+
+        // bob's identical exit pays exactly the same
+        vm.prank(bob);
+        vault.requestWithdraw(1000e18);
+        vm.warp(block.timestamp + 20);
+        vm.prank(bob);
+        uint256 bobPayout = vault.redeem(1000e18, bob, bob);
+        assertEq(bobPayout, alicePayout, "no first-mover advantage");
+
+        assertEq(vault.totalSupply(), 0);
+        assertEq(vault.depositLiability(), 0);
+    }
+
+    function test_HarvestBlockedWhileUnderwater() public {
+        vm.startPrank(alice);
+        vault.requestDeposit(1000e18); // id 0, stays queued
+        vault.requestDeposit(500e18); // id 1, cancelled -> 5e18 revenue
+        vault.cancelDepositRequest(1);
+        vm.stopPrank();
+
+        deal(address(alcx), address(vault), 500e18); // claims 1000 > balance 500
+
+        vm.prank(governance);
+        vm.expectRevert(VqALCX.ExceedsProtocolRevenue.selector);
+        vault.harvestRevenue(5e18);
+    }
 }

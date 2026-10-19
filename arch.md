@@ -29,7 +29,7 @@ The system has three layers:
 | # | Quality Goal | Rationale |
 |---|-------------|-----------|
 | 1 | **Governance attack resistance** — deposit and exit flows must be rate-limited by configurable bucket parameters such that voting power cannot be acquired or disposed of within a single block | This is the primary purpose of the protocol. Without it, the entire governance stack is vulnerable to flash-loan attacks, rushed and bank runs |
-| 2 | **Principal guarantee** — every backed vqALCX share must always be redeemable for exactly 1 ALCX at the watermark | Users loose WITH the protocol if backing gets below 1:1 but not TO the protocol. Everyone shares losses equally. |
+| 2 | **Principal guarantee** — every backed vqALCX share is redeemable for exactly 1 ALCX at the watermark while the vault is solvent | Everyone shares losses equally: all ALCX payouts are scaled by the live pro-rata watermark `min(1, balance / (totalSupply + depositLiability))`. Exits at the watermark preserve it, so there is no first-mover advantage and no bank-run incentive; a shortfall is shared equally by shareholders and queued depositors alike. |
 | 3 | **Pluggable auctioneer** — auction pricing logic must be replaceable without redeploying the core vault | Economic conditions change. The protocol must allow swapping the auctioneer via governance without disrupting user positions. |
 | 4 | **Permissionless progression** — the queue must advance without relying on any specific operator or keeper | Any state-changing vault interaction (requests, claims, auction hooks, parameter changes) triggers lazy bucket drip, processing the queue as a side effect; the public `drip()` lets anyone advance both queues. Views are pure reads and do not drip. No dedicated keeper role required. Walkaway safety. |
 
@@ -38,7 +38,7 @@ The system has three layers:
 | Stakeholder | Expectations |
 |------------|-------------|
 | **Alchemix DAO / governance** | Secure, sybil-resistant voting weight distribution; auction revenue stream; full parameter control via DAO proposals |
-| **ALCX depositors / vqALCX holders** | 1:1 principal protection (watermark guarantee); fair queue ordering (FIFO, no front-running); underwater vault affects everyone equally |
+| **ALCX depositors / vqALCX holders** | 1:1 principal protection (watermark guarantee); fair queue ordering (FIFO, no front-running); an underwater vault affects everyone equally via the pro-rata watermark |
 | **vqALCX stakers** | Governance participation (vote via staking contract); reward distribution proportional to staked balance; DAO-framework-specific voting experience |
 | **Auction participants** | Users who want immediate execution without waiting for the queue | Conventional rolling auctions determine market price; transparent pricing |
 | **Operators / protocol engineers** | Pluggable auctioneer contract; DAO-specific staking contract (adapter); hardcoded safety bounds on bucket parameters; two-step ownership transfer for safe operator rotation |
@@ -749,6 +749,7 @@ These invariants define properties that must hold true across all states of the 
 | INV-WM-3 | Minting vqALCX always increases the vault's ALCX balance by at least the equivalent share amount | Every new share is fully backed at the moment of minting. |
 | INV-WM-4 | Burning vqALCX never releases more ALCX than the shares being burned | The vault never overpays on withdrawal. |
 | INV-WM-5 | Protocol profit (vault balance - watermark) is always >= 0 | The watermark is a hard floor, not a target. The vault never runs a deficit. |
+| INV-WM-6 | Every ALCX payout is scaled by `watermark() = min(1, balance / (totalSupply + depositLiability))`; exits preserve the ratio | Equal loss sharing (QG-2): shareholders and queued depositors share a shortfall pro-rata, so exiting first gains nothing. |
 
 ## 10.2 Queue and bucket invariants
 
@@ -794,7 +795,7 @@ These invariants define properties that must hold true across all states of the 
 | INV-T-3 | The vault's ALCX balance increases by at least `assets` on every `mintViaAuction` call | Auction deposit does not leak ALCX. Premiums go above watermark. |
 | INV-T-4 | The vault's ALCX balance decreases by at most `assets * (1 - discount)` on every `burnViaAuction` call | Auction withdrawal discount stays in vault above watermark. |
 | INV-T-5 | `balanceOf(user)` only changes through `mint`, `burn`, or `transfer` — no rebasing, no auto-compounding, no silent updates (TC-4) | Required for `getPastBalanceOf` / delegate overriding / Aragon voting snapshots. Balance and voting power must map 1:1 at every checkpoint. |
-| INV-T-6 | ERC-4626 share price is pegged 1:1 at the watermark — `convertToAssets(1e18) == 1e18` always | The watermark is a hard floor. vqALCX never appreciates above 1:1. Protocol profit accrues as vault ALCX surplus, not as share price inflation. |
+| INV-T-6 | ERC-4626 share price is pegged 1:1 at the watermark while solvent — `convertToAssets(1e18) == 1e18` whenever `balance >= totalSupply + depositLiability`; underwater, conversions return the pro-rata watermark value, never above 1:1 | The watermark is a hard ceiling. vqALCX never appreciates above 1:1. Protocol profit accrues as vault ALCX surplus, not as share price inflation. |
 | INV-T-7 | In the staking contract, `_transferVotingUnits(from, to, amount)` is called AFTER every stake and unstake — never before (TC-5) | Checkpoints must reflect post-operation state. The staking contract (not the vault) implements VotesExtended on internal staked balances. |
 | INV-T-8 | In the staking contract, `_getVotingUnits(account)` equals `stakedBalance[account]` always (TC-5) | Voting power maps 1:1 to internal staked balance. This is the core invariant that makes `getPastBalanceOf` and `getPastVotes` consistent. |
 | INV-T-9 | Sum of all `stakedBalance[account]` equals total vqALCX held by the staking contract | Internal accounting is consistent with actual token holdings. |
@@ -815,7 +816,7 @@ These invariants define properties that must hold true across all states of the 
 
 | ID | Risk | Severity | Mitigation |
 |----|------|----------|------------|
-| R-1 | **Vault insolvency from external losses** — if ALCX held by the vault is lost due to an exploit or catastrophic event, the vault's ALCX backing falls below the watermark. | High | Quality goal #2 states losses are shared equally — the watermark adjusts down. Since deposited ALCX sits in the vault (not deployed externally), the primary risk is a smart contract vulnerability in the vault itself. Emergency pause (via Gnosis Safe) can stop new deposits while the situation is assessed. |
+| R-1 | **Vault insolvency from external losses** — if ALCX held by the vault is lost due to an exploit or catastrophic event, the vault's ALCX backing falls below the watermark. | High | Losses are shared equally by construction (QG-2): every ALCX payout — withdrawals, redemptions, deposit-request refunds, withdrawal-auction payouts — is scaled by `watermark() = min(1, balance / (totalSupply + depositLiability))`. Exits are ratio-preserving, so a run gains nothing; the withdraw rate limit plus emergency pause (Gnosis Safe) give governance time to respond. Harvests are blocked while underwater (revenue is junior to principal). Since deposited ALCX sits in the vault (not deployed externally), the primary risk is a smart contract vulnerability in the vault itself. |
 | R-2 | **Queue stagnation** — if nobody transacts with the vault for an extended period, lazy drip does not persist, and positions are never fulfilled. | Low | Any state-changing vault interaction triggers lazy drip, and `drip()` is permissionless. In practice, MEV bots monitor the vault and will trigger interactions to capture arbitrage opportunities. |
 | R-3 | **ERC-4626 inflation attack** — an attacker front-runs the first deposit to manipulate share price, causing subsequent depositors to receive fewer shares than expected. | Low | Standard ERC-4626 mitigation: virtual shares/offsets, or a minimum deposit amount. The queue model itself provides additional protection — the first deposit does not mint shares immediately (it enters the queue), so there is no share price to manipulate at deposit time. |
 
