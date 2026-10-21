@@ -215,7 +215,7 @@ contract VqAuctioner is ReentrancyGuard {
         if (fill > available) fill = available;
 
         if (fill > 0 && (vault.paused() || vault.authorizedAuctioneer() != address(this))) {
-             alcx.safeTransfer(winner, clearingPrice);
+            alcx.safeTransfer(winner, clearingPrice);
             emit DepositRoundSettled(roundId, winner, 0, clearingPrice);
             _startDepositRound();
             return;

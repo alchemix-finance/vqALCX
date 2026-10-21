@@ -2,14 +2,14 @@
 pragma solidity 0.8.36;
 
 import {Test} from "@forge-std/Test.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {VqALCX} from "../../../src/VqALCX.sol";
+import {MockALCX} from "../../mocks/Mocks.sol";
 
 /// @notice Handler for invariant testing of VqALCX vault
 /// @dev Called by the invariant test fuzzer. Each function performs random but valid actions.
 contract VqALCXHandler is Test {
     VqALCX public vault;
-    ERC20 public alcx;
+    MockALCX public alcx;
 
     address[] public actors;
     address public currentActor;
@@ -20,7 +20,7 @@ contract VqALCXHandler is Test {
 
     constructor(address _vault, address _alcx) {
         vault = VqALCX(_vault);
-        alcx = ERC20(_alcx);
+        alcx = MockALCX(_alcx);
 
         for (uint256 i = 0; i < 5; i++) {
             address actor = address(uint160(0x1000 + i));
@@ -31,7 +31,7 @@ contract VqALCXHandler is Test {
         }
 
         for (uint256 i = 0; i < actors.length; i++) {
-            deal(address(alcx), actors[i], INITIAL_MINT);
+            alcx.mint(actors[i], INITIAL_MINT); // direct mint: deal() uses vm.record, unsupported by hevm
         }
     }
 
