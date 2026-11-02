@@ -55,10 +55,8 @@ contract VqStakingTest is Test {
         vm.stopPrank();
     }
 
-    /// Stake, wait out the reward warm-up, then poke (zero-reward claim) so the
-    /// batch joins the earning pool.
     function _season(address user) internal {
-        vm.warp(block.timestamp + staking.REWARD_WARMUP() + 1);
+        vm.warp(block.timestamp + 2 days);
         vm.prank(user);
         staking.claimRewards();
     }
@@ -393,6 +391,116 @@ contract VqStakingTest is Test {
         vm.prank(alice);
         staking.claimRewards();
         assertEq(staking.earned(alice), 0, "warming stake earns nothing");
+    }
+
+    function test_PassiveStakerEarnsFromMaturityWithoutTouching() public {
+        _depositVqALCX(alice, 1000e18);
+        _depositVqALCX(bob, 1000e18);
+
+        vm.prank(alice);
+        staking.stake(1000e18);
+        vm.prank(bob);
+        staking.stake(1000e18);
+
+        _season(bob);
+
+        rewardToken.transfer(address(staking), 300e18);
+        vm.prank(bob);
+        staking.claimRewards();
+        assertApproxEqAbs(rewardToken.balanceOf(bob), 150e18, 1);
+
+        vm.warp(block.timestamp + 90 days);
+        rewardToken.transfer(address(staking), 100e18);
+        vm.prank(alice);
+        staking.claimRewards();
+        assertApproxEqAbs(rewardToken.balanceOf(alice), 200e18, 1);
+        assertApproxEqAbs(rewardToken.balanceOf(bob), 150e18, 1);
+    }
+
+    function test_WarmingStakeExcludedFromDistributionsBeforeMaturity() public {
+        _depositVqALCX(alice, 1000e18);
+        _depositVqALCX(bob, 1000e18);
+
+        vm.prank(bob);
+        staking.stake(1000e18);
+        _season(bob);
+
+        rewardToken.transfer(address(staking), 100e18);
+        vm.prank(alice);
+        staking.stake(1000e18);
+        vm.prank(bob);
+        staking.claimRewards();
+        assertApproxEqAbs(rewardToken.balanceOf(bob), 100e18, 1);
+
+        vm.warp(block.timestamp + 2 days);
+        rewardToken.transfer(address(staking), 100e18);
+        vm.prank(alice);
+        staking.claimRewards();
+        assertApproxEqAbs(rewardToken.balanceOf(alice), 0, 1);
+        assertApproxEqAbs(staking.earned(bob), 100e18, 1);
+    }
+
+    function test_TopUpRebucketsAndUnstakeDrainsMaturityBucket() public {
+        _depositVqALCX(alice, 2000e18);
+
+        vm.prank(alice);
+        staking.stake(1000e18);
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(alice);
+        staking.stake(1000e18);
+
+        vm.prank(alice);
+        staking.unstake(500e18);
+
+        assertEq(staking.totalStaked(), 1500e18);
+
+        vm.warp(block.timestamp + 2 days);
+        staking.accrueRewards();
+        rewardToken.transfer(address(staking), 150e18);
+        vm.prank(alice);
+        staking.claimRewards();
+        assertApproxEqAbs(rewardToken.balanceOf(alice), 150e18, 1);
+    }
+
+    function test_DeferredAccrualJitStakeCapturesNothing() public {
+        _depositVqALCX(alice, 1000e18);
+        _depositVqALCX(bob, 1000e18);
+
+        vm.prank(bob);
+        staking.stake(1000e18);
+        _season(bob);
+
+        vm.warp(((block.timestamp / 1 days) + 1) * 1 days);
+        vm.prank(alice);
+        staking.stake(1000e18);
+        rewardToken.transfer(address(staking), 100e18);
+
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(alice);
+        staking.claimRewards();
+        assertEq(rewardToken.balanceOf(alice), 0);
+
+        vm.prank(bob);
+        staking.claimRewards();
+        assertApproxEqAbs(rewardToken.balanceOf(bob), 100e18, 1);
+    }
+
+    function test_SweepCatchUpChunkedMatchesSingleSweep() public {
+        _depositVqALCX(alice, 1000e18);
+
+        vm.prank(alice);
+        staking.stake(1000e18);
+
+        vm.warp(block.timestamp + 1500 days);
+        rewardToken.transfer(address(staking), 100e18);
+
+        for (uint256 i = 0; i < 15; ++i) {
+            staking.accrueRewards();
+        }
+
+        vm.prank(alice);
+        staking.claimRewards();
+        assertApproxEqAbs(rewardToken.balanceOf(alice), 100e18, 1);
     }
 
     function test_UnstakeIsInstantDuringWarmup() public {
